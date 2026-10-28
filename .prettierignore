@@ -1,0 +1,6 @@
+node_modules
+src/tslib
+package-lock.json
+data
+*.png
+*.md
