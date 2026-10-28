@@ -1,0 +1,5 @@
+node_modules
+.env
+identity.json
+*.ppn
+.claude/settings.local.json

@@ -1,0 +1,27 @@
+{
+  "name": "ts-gemini-bot",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "tsx --env-file=.env src/index.ts",
+    "lint": "oxlint src",
+    "format": "prettier --write .",
+    "test": "vitest run",
+    "check": "oxlint src && tsc --noEmit && vitest run"
+  },
+  "devDependencies": {
+    "@types/libsodium-wrappers-sumo": "^0.7.8",
+    "@types/node": "^26.6.5",
+    "oxlint": "^1.90.0",
+    "prettier": "^3.9.10",
+    "tsx": "^4.23.15",
+    "typescript": "^7.0.2",
+    "vitest": "^5.0.5"
+  },
+  "dependencies": {
+    "@google/genai": "^2.30.0",
+    "libsodium-wrappers-sumo": "^0.8.4",
+    "opusscript": "^0.1.1",
+    "sherpa-onnx-node": "^1.13.8"
+  }
+}
