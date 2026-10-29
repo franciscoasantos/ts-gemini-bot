@@ -13,6 +13,7 @@ import {
   playRadio,
   getQueue,
   removeFromQueue,
+  clearQueue,
   skip,
   stop,
   pause,
@@ -28,6 +29,8 @@ const env = process.env;
 interface VoiceDeps {
   sendText: (targetmode: number, target: number, text: string) => void;
   isIgnored: (clid: number) => boolean;
+  setAutoplay: (on: boolean) => void;
+  isAutoplayOn: () => boolean;
 }
 
 /**
@@ -35,7 +38,7 @@ interface VoiceDeps {
  * and returns the "voice" event handler plus a reset (for reconnects). Call once at boot.
  */
 export function initVoice(client: Ts3Client, deps: VoiceDeps) {
-  const { sendText, isIgnored } = deps;
+  const { sendText, isIgnored, setAutoplay, isAutoplayOn } = deps;
 
   // ---------- Wake word via VAD + Whisper-PT (transcribe and look for the trigger word) ----------
   const MODEL = env.KWS_DIR!;
@@ -196,19 +199,32 @@ export function initVoice(client: Ts3Client, deps: VoiceDeps) {
                 ]),
               );
             const q = String(args?.query ?? args?.name ?? "");
+            // play_music/add_to_queue take a list of songs; the single-song tools use `query`.
+            const queries: string[] = Array.isArray(args?.queries)
+              ? args.queries.map(String).filter(Boolean)
+              : q
+                ? [q]
+                : [];
             // Pick the action and return a short English status; Gemini phrases the spoken
             // confirmation in the configured language. "play_music" decides queue vs. now from
             // current state so the confirmation matches what actually happened.
             let run: () => Promise<unknown> = async () => {};
             let result: Record<string, unknown>;
             if (name === "play_music") {
-              if (await shouldQueue().catch(() => false)) {
-                run = () => enqueueMusic(q);
-                result = { ok: true, action: "queued", query: q };
-              } else {
-                run = () => playMusic(q);
-                result = { ok: true, action: "playing_now", query: q };
-              }
+              const queueMode = await shouldQueue().catch(() => false);
+              // enqueue in order; if nothing is playing, the first song plays now and the rest queue
+              run = async () => {
+                for (let i = 0; i < queries.length; i++) {
+                  if (i === 0 && !queueMode) await playMusic(queries[i]);
+                  else await enqueueMusic(queries[i]);
+                }
+              };
+              result = { ok: true, action: queueMode ? "queued" : "playing_now", count: queries.length, queries };
+            } else if (name === "add_to_queue") {
+              run = async () => {
+                for (const s of queries) await enqueueMusic(s);
+              };
+              result = { ok: true, action: "queued", count: queries.length, queries };
             } else if (name === "remove_from_queue") {
               // fast (no download): do it now and report the real outcome
               const title = await removeFromQueue(q).catch(() => null);
@@ -232,17 +248,24 @@ export function initVoice(client: Ts3Client, deps: VoiceDeps) {
               } else {
                 msg += t.noUpcoming;
               }
+              const autoplay = isAutoplayOn();
+              msg += `\n${t.autoplay(autoplay)}`;
               sendText(2, 0, msg);
-              result = { ok: true, action: "listed_in_chat" };
+              // return autoplay in the data so Gemini also says it out loud in the spoken confirmation
+              result = { ok: true, action: "listed_in_chat", autoplay };
             } else if (name === "write_chat") {
               const text = String(args?.text || "");
               if (text) sendText(2, 0, text);
               result = { ok: true, action: "wrote_in_chat" };
+            } else if (name === "autoplay_on" || name === "autoplay_off") {
+              const on = name === "autoplay_on";
+              setAutoplay(on);
+              result = { ok: true, action: on ? "autoplay_on" : "autoplay_off" };
             } else {
               const actions: Record<string, { run: () => Promise<unknown>; action: string }> = {
                 play_now: { run: () => playNowKeepQueue(q), action: "playing_now" },
-                add_to_queue: { run: () => enqueueMusic(q), action: "queued" },
                 play_radio: { run: () => playRadio(q), action: "playing_radio" },
+                clear_queue: { run: clearQueue, action: "queue_cleared" },
                 skip_track: { run: skip, action: "skipped" },
                 stop_music: { run: stop, action: "stopped" },
                 pause_music: { run: pause, action: "paused" },

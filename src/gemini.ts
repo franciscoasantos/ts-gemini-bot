@@ -15,6 +15,26 @@ export async function ask(question: string): Promise<string> {
   return res.text?.trim() || "(no answer)";
 }
 
+// Suggests ONE more song (as a "Artist - Title" search query) in a style similar to `nowPlaying`,
+// avoiding the given titles. Returns null if the model gives nothing usable. Not user-facing, so
+// it is not localized — the result goes straight into a YouTube search.
+export async function suggestNextSong(nowPlaying: string, avoid: string[]): Promise<string | null> {
+  const res = await ai.models.generateContent({
+    model: TEXT_MODEL,
+    contents:
+      `A song is playing: "${nowPlaying}".\n` +
+      `Suggest ONE other song in a similar genre, style and mood to play next.\n` +
+      (avoid.length ? `Do not repeat any of these: ${avoid.join("; ")}.\n` : "") +
+      `Answer with ONLY the song as "Artist - Title", no quotes, no numbering, no extra text.`,
+    config: { systemInstruction: "You are a music recommender. Reply with a single song and nothing else." },
+  });
+  const line = (res.text || "")
+    .split("\n")
+    .map((l) => l.replace(/^["'\s\-\d.]+|["']+$/g, "").trim())
+    .find((l) => l.length > 0);
+  return line || null;
+}
+
 export interface LiveHandlers {
   audio: (pcm24k: Buffer) => void;
   turnComplete: () => void;
@@ -28,14 +48,26 @@ const searchParam = {
   properties: { query: { type: Type.STRING, description: "Song name and/or artist to search on YouTube" } },
   required: ["query"],
 };
+const songsParam = {
+  type: Type.OBJECT,
+  properties: {
+    queries: {
+      type: Type.ARRAY,
+      items: { type: Type.STRING },
+      description:
+        "One or more songs to search on YouTube, in order (song name and/or artist each). For a request like 'the 3 best songs by X' or 'play some Y', expand it yourself into that many specific song titles.",
+    },
+  },
+  required: ["queries"],
+};
 const TOOLS = [
   {
     functionDeclarations: [
       {
         name: "play_music",
         description:
-          "Normal request to play a song. If something is already playing, add it to the queue; if nothing is playing, play it now. Use for 'play', 'put on', 'add' a song.",
-        parameters: searchParam,
+          "Normal request to play one or more songs. If something is already playing, they go to the queue; otherwise the first plays now and the rest queue. Accepts several songs at once ('play the 3 best songs by X'). Use for 'play', 'put on', 'add'.",
+        parameters: songsParam,
       },
       {
         name: "play_now",
@@ -46,8 +78,8 @@ const TOOLS = [
       {
         name: "add_to_queue",
         description:
-          "Add a song to the queue without interrupting what is playing. Use when asked to add/enqueue/queue a song.",
-        parameters: searchParam,
+          "Add one or more songs to the queue without interrupting what is playing. Accepts several at once. Use when asked to add/enqueue/queue song(s).",
+        parameters: songsParam,
       },
       {
         name: "play_radio",
@@ -68,7 +100,7 @@ const TOOLS = [
       {
         name: "list_queue",
         description:
-          "List the queued songs and write them to the channel text chat. Use when asked what is in the queue, what is coming up, or what is playing.",
+          "List the queued songs and write them to the channel text chat. Use when asked what is in the queue, what is coming up, or what is playing. The result includes an `autoplay` flag; when you confirm out loud, also say whether autoplay is on or off.",
         parameters: { type: Type.OBJECT, properties: {} },
       },
       {
@@ -88,6 +120,12 @@ const TOOLS = [
       },
       { name: "stop_music", description: "Stop music playback.", parameters: { type: Type.OBJECT, properties: {} } },
       {
+        name: "clear_queue",
+        description:
+          "Clear the music queue: remove all upcoming songs (the current one keeps playing). Use when asked to clear/empty/wipe the queue.",
+        parameters: { type: Type.OBJECT, properties: {} },
+      },
+      {
         name: "pause_music",
         description: "Pause the current song.",
         parameters: { type: Type.OBJECT, properties: {} },
@@ -95,6 +133,17 @@ const TOOLS = [
       {
         name: "resume_music",
         description: "Resume the paused song.",
+        parameters: { type: Type.OBJECT, properties: {} },
+      },
+      {
+        name: "autoplay_on",
+        description:
+          "Turn on autoplay: automatically keep the queue filled with songs similar to the one playing, so the music never stops. Use when asked to enable autoplay or 'keep playing similar songs' / 'don't let it run out'.",
+        parameters: { type: Type.OBJECT, properties: {} },
+      },
+      {
+        name: "autoplay_off",
+        description: "Turn off autoplay (stop auto-filling the queue).",
         parameters: { type: Type.OBJECT, properties: {} },
       },
     ],

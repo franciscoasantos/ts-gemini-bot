@@ -11,6 +11,7 @@ interface Strings {
   noUpcoming: string;
   andMore: (n: number) => string;
   geminiError: string;
+  autoplay: (on: boolean) => string;
 }
 
 const LOCALES: Record<string, Strings> = {
@@ -22,6 +23,7 @@ const LOCALES: Record<string, Strings> = {
     noUpcoming: "(sem próximas na fila)",
     andMore: (n) => `… e mais ${n}`,
     geminiError: "Deu erro falando com o Gemini.",
+    autoplay: (on) => (on ? "🔁 Autoplay ligado." : "⏹ Autoplay desligado."),
   },
   en: {
     name: "English",
@@ -31,6 +33,7 @@ const LOCALES: Record<string, Strings> = {
     noUpcoming: "(nothing else queued)",
     andMore: (n) => `… and ${n} more`,
     geminiError: "Something went wrong talking to Gemini.",
+    autoplay: (on) => (on ? "🔁 Autoplay on." : "⏹ Autoplay off."),
   },
 };
 

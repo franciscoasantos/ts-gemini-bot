@@ -3,6 +3,7 @@ import { Ts3Client, buildCommand, generateIdentity, restoreIdentity, type Parsed
 import { ask } from "./gemini.js";
 import { uploadAvatar } from "./filetransfer.js";
 import { initVoice } from "./voice.js";
+import { initAutoplay } from "./autoplay.js";
 import { t } from "./i18n.js";
 
 const env = process.env;
@@ -105,12 +106,23 @@ client.on("textMessage", async (p: Record<string, string>) => {
   const from = Number(p.invokerid);
   if (from === client.getClientId()) return;
   const mode = Number(p.targetmode);
+  const [tm, target] = mode === 1 ? [1, from] : [2, 0];
+
+  // !autoplay [on|off] — toggles if no argument. Works in channel and private, no Live quota needed.
+  const ap = /^!autoplay(?:\s+(on|off|1|0))?\s*$/i.exec(p.msg.trim());
+  if (ap) {
+    const arg = ap[1]?.toLowerCase();
+    const on = arg ? arg === "on" || arg === "1" : autoplay.toggle();
+    if (arg) autoplay.setEnabled(on);
+    sendText(tm, target, t.autoplay(on));
+    return;
+  }
+
   let q: string;
   if (mode === 1) q = p.msg;
   else if (mode === 2 && /^!gemini\b/i.test(p.msg)) q = p.msg.replace(/^!gemini\s*/i, "");
   else return;
   if (!q.trim()) return;
-  const [tm, target] = mode === 1 ? [1, from] : [2, 0];
   try {
     sendText(tm, target, await ask(q));
   } catch (e: any) {
@@ -120,7 +132,13 @@ client.on("textMessage", async (p: Record<string, string>) => {
 });
 
 // ---------- Voice: wake word + Gemini Live (pipeline in voice.ts) ----------
-const voice = initVoice(client, { sendText, isIgnored });
+const autoplay = initAutoplay();
+const voice = initVoice(client, {
+  sendText,
+  isIgnored,
+  setAutoplay: autoplay.setEnabled,
+  isAutoplayOn: autoplay.isEnabled,
+});
 client.on("voice", voice.onVoice);
 client.on("disconnected", () => {
   voice.reset(); // clear any stuck conversation before coming back

@@ -32,6 +32,9 @@ transcribes → finds the wake word → opens a Gemini Live session → audio ba
 - `src/gemini.ts` — `ask()` (text, `generateContent`) and `openLive()` (voice, Live API).
   `PERSONA`, `TOOLS` (music functionDeclarations) and the `systemInstruction` live here.
 - `src/i18n.ts` — `BOT_LANGUAGE`: the prompt's language name and the few bot-written strings.
+- `src/autoplay.ts` — keeps the queue topped up with similar songs (Gemini-picked) while music
+  plays, staying one ahead so there's no gap, and restarts playback with a fresh song if it stops.
+  Toggled by voice (`autoplay_on`/`off`), the `!autoplay [on|off]` text command, or `AUTOPLAY`.
 - `src/manager.ts` — TS6 Manager REST client (JWT login, play/queue/radio/etc).
 - `src/audio.ts` — Opus (opusscript/WASM), resample 48↔16k and 24→48k, `Player`, `beep`.
 - `src/filetransfer.ts` — avatar upload via the TS file transfer.
@@ -72,5 +75,6 @@ transcribes → finds the wake word → opens a Gemini Live session → audio ba
 ## Config (`.env`, see `.env.example`)
 
 Required: `TS_HOST`, `GEMINI_API_KEY`, `KWS_DIR`. Reply language: `BOT_LANGUAGE` (default `pt-BR`).
-Music: `MANAGER_USER`/`MANAGER_PASS` (empty disables it). Common tweaks: `WAKE_WORDS`,
-`WHISPER_PREFIX` (tiny|base|small), `CONVO_IDLE_MS`, `IGNORE_SPEAKERS`, `BEEP=0`, `DEBUG_VOICE=1`.
+Music: `MANAGER_USER`/`MANAGER_PASS` (empty disables it). Autoplay: `AUTOPLAY=1` (also by voice).
+Common tweaks: `WAKE_WORDS`, `WHISPER_PREFIX` (tiny|base|small), `CONVO_IDLE_MS`, `IGNORE_SPEAKERS`,
+`BEEP=0`, `DEBUG_VOICE=1`.

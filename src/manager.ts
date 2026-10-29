@@ -155,6 +155,28 @@ export async function removeFromQueue(query: string): Promise<string> {
   return title;
 }
 
+// Clear the queue: remove every upcoming song (the current one keeps playing). Returns how many
+// were removed. Deletes high → low so the indices don't shift under us.
+export async function clearQueue(): Promise<number> {
+  requireCreds();
+  const { id } = await findBot();
+  const st: any = await (await ok(await api(`/music-bots/${id}/state`, { method: "GET" }), "state")).json();
+  const items: any[] = st.queue || [];
+  const np = st.nowPlaying?.title || null;
+  const idx =
+    typeof st.currentIndex === "number" && st.currentIndex >= 0
+      ? st.currentIndex
+      : np
+        ? items.map((i) => i.title).lastIndexOf(np)
+        : -1;
+  let removed = 0;
+  for (let i = items.length - 1; i > idx; i--) {
+    const r = await api(`/music-bots/${id}/queue/${i}`, { method: "DELETE" });
+    if (r.ok) removed++;
+  }
+  return removed;
+}
+
 // true if something is already playing/paused → a "play" should enqueue instead of overriding.
 export async function shouldQueue(): Promise<boolean> {
   requireCreds();
