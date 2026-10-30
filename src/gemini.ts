@@ -2,7 +2,10 @@ import { GoogleGenAI, Modality, Type, type Session } from "@google/genai";
 import { languageName } from "./i18n.js";
 
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
-const TEXT_MODEL = process.env.GEMINI_TEXT_MODEL || "gemini-flash-latest";
+// Pinned to a specific model, not the "-latest" alias: the alias silently repoints to the newest
+// Flash (e.g. gemini-3.8-flash, free-tier cap of 20 requests/day), which starves autoplay/chat.
+// The lite tier has its own, larger free-tier quota.
+const TEXT_MODEL = process.env.GEMINI_TEXT_MODEL || "gemini-3.1-flash-lite";
 const LIVE_MODEL = process.env.GEMINI_LIVE_MODEL || "gemini-3.1-flash-live-preview";
 const PERSONA = "You are Gemini, a bot on a TeamSpeak server. Be short and direct.";
 
@@ -15,24 +18,25 @@ export async function ask(question: string): Promise<string> {
   return res.text?.trim() || "(no answer)";
 }
 
-// Suggests ONE more song (as a "Artist - Title" search query) in a style similar to `nowPlaying`,
-// avoiding the given titles. Returns null if the model gives nothing usable. Not user-facing, so
-// it is not localized — the result goes straight into a YouTube search.
-export async function suggestNextSong(nowPlaying: string, avoid: string[]): Promise<string | null> {
+// Suggests up to `count` songs (each a "Artist - Title" search query) in a style similar to
+// `nowPlaying`, avoiding the given titles. Asking for several in one call keeps autoplay's Gemini
+// usage low (one request per batch instead of per song). Not user-facing, so it is not localized —
+// each line goes straight into a YouTube search.
+export async function suggestNextSongs(nowPlaying: string, avoid: string[], count = 5): Promise<string[]> {
   const res = await ai.models.generateContent({
     model: TEXT_MODEL,
     contents:
       `A song is playing: "${nowPlaying}".\n` +
-      `Suggest ONE other song in a similar genre, style and mood to play next.\n` +
+      `Suggest ${count} other songs in a similar genre, style and mood to play next.\n` +
       (avoid.length ? `Do not repeat any of these: ${avoid.join("; ")}.\n` : "") +
-      `Answer with ONLY the song as "Artist - Title", no quotes, no numbering, no extra text.`,
-    config: { systemInstruction: "You are a music recommender. Reply with a single song and nothing else." },
+      `Answer with ONLY the songs, one per line as "Artist - Title", no quotes, no numbering, no extra text.`,
+    config: { systemInstruction: "You are a music recommender. Reply with one song per line and nothing else." },
   });
-  const line = (res.text || "")
+  return (res.text || "")
     .split("\n")
     .map((l) => l.replace(/^["'\s\-\d.]+|["']+$/g, "").trim())
-    .find((l) => l.length > 0);
-  return line || null;
+    .filter((l) => l.length > 0)
+    .slice(0, count);
 }
 
 export interface LiveHandlers {

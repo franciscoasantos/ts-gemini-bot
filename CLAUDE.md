@@ -33,8 +33,8 @@ transcribes → finds the wake word → opens a Gemini Live session → audio ba
   `PERSONA`, `TOOLS` (music functionDeclarations) and the `systemInstruction` live here.
 - `src/i18n.ts` — `BOT_LANGUAGE`: the prompt's language name and the few bot-written strings.
 - `src/autoplay.ts` — keeps the queue topped up with similar songs (Gemini-picked) while music
-  plays, staying one ahead so there's no gap, and restarts playback with a fresh song if it stops.
-  Toggled by voice (`autoplay_on`/`off`), the `!autoplay [on|off]` text command, or `AUTOPLAY`.
+  plays, refilling in batches when it runs low (one Gemini call per batch), and restarts playback
+  if it stops. Toggled by voice (`autoplay_on`/`off`), the `!autoplay [on|off]` command, or `AUTOPLAY`.
 - `src/manager.ts` — TS6 Manager REST client (JWT login, play/queue/radio/etc).
 - `src/audio.ts` — Opus (opusscript/WASM), resample 48↔16k and 24→48k, `Player`, `beep`.
 - `src/filetransfer.ts` — avatar upload via the TS file transfer.
@@ -57,6 +57,11 @@ transcribes → finds the wake word → opens a Gemini Live session → audio ba
   free-tier quota. Many tests in one day exhaust it ("exceeded your current quota") and voice
   dies; text (`generateContent`) has a different quota and keeps working. Resets daily (Pacific
   time) or with billing enabled.
+- **Pin the text model, never a `-latest` alias**: the alias repoints to the newest Flash, which
+  can carry a tiny free-tier quota (`gemini-3.8-flash` = 20 requests/day) that autoplay drains in
+  minutes. `GEMINI_TEXT_MODEL` is pinned to a lite model (`gemini-3.1-flash-lite`) for a larger,
+  predictable quota. Older models (2.0/2.5) are retired — if a pinned one 404s "no longer
+  available", list `…/v1beta/models` for the key and pin a current one.
 - **Wake word**: whisper-base can't hear "gemini"/"alfredo"/"robô" reliably (it misspells them in
   PT). Hence the trigger is "ok google", which it always gets right. `WAKE_WORDS` is a regex
   tested against the PT transcription (lowercased); moving to whisper-small improves accuracy but
