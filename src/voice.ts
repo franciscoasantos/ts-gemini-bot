@@ -115,6 +115,10 @@ export function initVoice(client: Ts3Client, deps: VoiceDeps) {
   let convoTimer: NodeJS.Timeout | undefined; // ends the conversation after a long silence
   let closeAfterTurn = false; // close the session after a command's confirmation is spoken
   const CONVO_IDLE_MS = Number(env.CONVO_IDLE_MS || 12000); // auto-unlock after this much silence
+  // Music actions run through this chain so a compound request ("clear the queue then play X")
+  // executes in the order received instead of racing. Each step catches its own error so one
+  // failure never stalls the next.
+  let actionChain: Promise<unknown> = Promise.resolve();
 
   function toLive(pcm: Int16Array) {
     const data = Buffer.from(pcm.buffer, pcm.byteOffset, pcm.byteLength).toString("base64");
@@ -211,15 +215,17 @@ export function initVoice(client: Ts3Client, deps: VoiceDeps) {
             let run: () => Promise<unknown> = async () => {};
             let result: Record<string, unknown>;
             if (name === "play_music") {
-              const queueMode = await shouldQueue().catch(() => false);
-              // enqueue in order; if nothing is playing, the first song plays now and the rest queue
+              const queueModeNow = await shouldQueue().catch(() => false); // for the spoken confirmation
+              // Re-decided at run time (after any clear/stop ahead of us in the chain has run), so
+              // "clear the queue then play X" actually plays X instead of queuing it behind nothing.
               run = async () => {
+                const queueMode = await shouldQueue().catch(() => false);
                 for (let i = 0; i < queries.length; i++) {
                   if (i === 0 && !queueMode) await playMusic(queries[i]);
                   else await enqueueMusic(queries[i]);
                 }
               };
-              result = { ok: true, action: queueMode ? "queued" : "playing_now", count: queries.length, queries };
+              result = { ok: true, action: queueModeNow ? "queued" : "playing_now", count: queries.length, queries };
             } else if (name === "add_to_queue") {
               run = async () => {
                 for (const s of queries) await enqueueMusic(s);
@@ -278,16 +284,18 @@ export function initVoice(client: Ts3Client, deps: VoiceDeps) {
             }
             // Heavy action (download ~10s) runs in the background; Gemini confirms by voice now and
             // the session closes right after that confirmation (closeAfterTurn), not during the download.
-            run().catch((e) => {
-              console.error(`[tool] ${name} error:`, e.message);
-              if (beeps)
-                player.push(
-                  beep([
-                    { f: 392, ms: 150 },
-                    { f: 294, ms: 200 },
-                  ]),
-                ); // only on failure
-            });
+            actionChain = actionChain
+              .then(() => run())
+              .catch((e) => {
+                console.error(`[tool] ${name} error:`, e.message);
+                if (beeps)
+                  player.push(
+                    beep([
+                      { f: 392, ms: 150 },
+                      { f: 294, ms: 200 },
+                    ]),
+                  ); // only on failure
+              });
             closeAfterTurn = true;
             clearTimeout(convoTimer);
             convoTimer = setTimeout(endConversationQuiet, 10000); // safety, in case turnComplete never arrives
