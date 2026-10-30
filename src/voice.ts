@@ -31,6 +31,7 @@ interface VoiceDeps {
   isIgnored: (clid: number) => boolean;
   setAutoplay: (on: boolean) => void;
   isAutoplayOn: () => boolean;
+  onUserStop: () => void;
 }
 
 /**
@@ -38,7 +39,7 @@ interface VoiceDeps {
  * and returns the "voice" event handler plus a reset (for reconnects). Call once at boot.
  */
 export function initVoice(client: Ts3Client, deps: VoiceDeps) {
-  const { sendText, isIgnored, setAutoplay, isAutoplayOn } = deps;
+  const { sendText, isIgnored, setAutoplay, isAutoplayOn, onUserStop } = deps;
 
   // ---------- Wake word via VAD + Whisper-PT (transcribe and look for the trigger word) ----------
   const MODEL = env.KWS_DIR!;
@@ -267,13 +268,16 @@ export function initVoice(client: Ts3Client, deps: VoiceDeps) {
               const on = name === "autoplay_on";
               setAutoplay(on);
               result = { ok: true, action: on ? "autoplay_on" : "autoplay_off" };
+            } else if (name === "stop_music") {
+              onUserStop(); // explicit stop: tell autoplay to stay stopped, don't auto-restart
+              run = stop;
+              result = { ok: true, action: "stopped" };
             } else {
               const actions: Record<string, { run: () => Promise<unknown>; action: string }> = {
                 play_now: { run: () => playNowKeepQueue(q), action: "playing_now" },
                 play_radio: { run: () => playRadio(q), action: "playing_radio" },
                 clear_queue: { run: clearQueue, action: "queue_cleared" },
                 skip_track: { run: skip, action: "skipped" },
-                stop_music: { run: stop, action: "stopped" },
                 pause_music: { run: pause, action: "paused" },
                 resume_music: { run: resume, action: "resumed" },
               };

@@ -108,6 +108,14 @@ client.on("textMessage", async (p: Record<string, string>) => {
   const mode = Number(p.targetmode);
   const [tm, target] = mode === 1 ? [1, from] : [2, 0];
 
+  // The music bot's own !stop (typed by a user) stops playback directly, bypassing our stop_music
+  // tool — so autoplay wouldn't know and would revive the music. Watch for it and mark the stop as
+  // intentional; we don't stop anything ourselves (the music bot already does).
+  if (/^!stop\b/i.test(p.msg.trim())) {
+    autoplay.onUserStop();
+    return;
+  }
+
   // !autoplay [on|off] — toggles if no argument. Works in channel and private, no Live quota needed.
   const ap = /^!autoplay(?:\s+(on|off|1|0))?\s*$/i.exec(p.msg.trim());
   if (ap) {
@@ -138,6 +146,7 @@ const voice = initVoice(client, {
   isIgnored,
   setAutoplay: autoplay.setEnabled,
   isAutoplayOn: autoplay.isEnabled,
+  onUserStop: autoplay.onUserStop,
 });
 client.on("voice", voice.onVoice);
 client.on("disconnected", () => {

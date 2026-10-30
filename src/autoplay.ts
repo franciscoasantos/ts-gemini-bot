@@ -13,6 +13,9 @@ export function initAutoplay() {
   let enabled = env.AUTOPLAY === "1";
   const recent: string[] = []; // titles played/added, lowercased — to avoid repeats (bounded)
   let running = false; // skip a tick while a download from the previous one is still in flight
+  // Set when the user explicitly stops the music: autoplay then leaves it stopped instead of
+  // restarting. Cleared automatically once something is playing again (a fresh play resumes it).
+  let stoppedByUser = false;
 
   function remember(title: string) {
     const t = title.toLowerCase();
@@ -37,17 +40,20 @@ export function initAutoplay() {
     running = true;
     try {
       const { nowPlaying, upcoming } = await getQueue();
-      if (nowPlaying) remember(nowPlaying);
+      if (nowPlaying) {
+        remember(nowPlaying);
+        stoppedByUser = false; // something is playing again → resume normal autoplay
+      }
       upcoming.forEach(remember);
 
       if (!nowPlaying) {
-        // Playback stopped (a song ended/failed, or the queue ran out). The Manager advances on
-        // its own while playing but stays stopped once it halts, so restart it with a fresh
+        // The user asked to stop: honor it, don't bring the music back.
+        if (stoppedByUser) return;
+        // Playback stopped on its own (a song ended/failed, or the queue ran out). The Manager
+        // advances while playing but stays stopped once it halts, so restart it with a fresh
         // similar song and queue the rest of the batch behind it. Seed from the last thing we
         // heard; on a cold start with no history, stay silent until someone plays something first
         // (don't blast music out of nowhere on boot).
-        // ponytail: while autoplay is on this also "fights" an explicit stop (resumes within a
-        // poll); turning autoplay off is the way to get silence.
         const seed = recent[recent.length - 1];
         if (!seed) return;
         const [first, ...rest] = await suggestNextSongs(seed, recent.slice(-20), BATCH);
@@ -87,6 +93,9 @@ export function initAutoplay() {
     setEnabled,
     toggle: () => (setEnabled(!enabled), enabled),
     isEnabled: () => enabled,
+    onUserStop: () => {
+      stoppedByUser = true;
+    },
     stop: () => clearInterval(timer),
   };
 }
