@@ -32,6 +32,8 @@ interface VoiceDeps {
   setAutoplay: (on: boolean) => void;
   isAutoplayOn: () => boolean;
   onUserStop: () => void;
+  pauseFill: () => void; // clearing the queue pauses autoplay's filling
+  resumeFill: () => void; // a user play re-arms it
 }
 
 /**
@@ -39,7 +41,7 @@ interface VoiceDeps {
  * and returns the "voice" event handler plus a reset (for reconnects). Call once at boot.
  */
 export function initVoice(client: Ts3Client, deps: VoiceDeps) {
-  const { sendText, isIgnored, setAutoplay, isAutoplayOn, onUserStop } = deps;
+  const { sendText, isIgnored, setAutoplay, isAutoplayOn, onUserStop, pauseFill, resumeFill } = deps;
 
   // ---------- Wake word via VAD + Whisper-PT (transcribe and look for the trigger word) ----------
   const MODEL = env.KWS_DIR!;
@@ -210,6 +212,9 @@ export function initVoice(client: Ts3Client, deps: VoiceDeps) {
               : q
                 ? [q]
                 : [];
+            // A user-initiated play/queue re-arms autoplay filling if a queue-clear had paused it.
+            if (name === "play_music" || name === "play_now" || name === "add_to_queue" || name === "play_radio")
+              resumeFill();
             // Pick the action and return a short English status; Gemini phrases the spoken
             // confirmation in the configured language. "play_music" decides queue vs. now from
             // current state so the confirmation matches what actually happened.
@@ -272,11 +277,14 @@ export function initVoice(client: Ts3Client, deps: VoiceDeps) {
               onUserStop(); // explicit stop: tell autoplay to stay stopped, don't auto-restart
               run = stop;
               result = { ok: true, action: "stopped" };
+            } else if (name === "clear_queue") {
+              pauseFill(); // pause autoplay's filling (it resumes when you play again) so it doesn't refill what was just cleared
+              run = clearQueue;
+              result = { ok: true, action: "queue_cleared", autoplayPaused: true };
             } else {
               const actions: Record<string, { run: () => Promise<unknown>; action: string }> = {
                 play_now: { run: () => playNowKeepQueue(q), action: "playing_now" },
                 play_radio: { run: () => playRadio(q), action: "playing_radio" },
-                clear_queue: { run: clearQueue, action: "queue_cleared" },
                 skip_track: { run: skip, action: "skipped" },
                 pause_music: { run: pause, action: "paused" },
                 resume_music: { run: resume, action: "resumed" },

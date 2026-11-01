@@ -126,7 +126,7 @@ const TOOLS = [
       {
         name: "clear_queue",
         description:
-          "Clear the music queue: remove all upcoming songs (the current one keeps playing). Use when asked to clear/empty/wipe the queue.",
+          "Clear the music queue: remove all upcoming songs (the current one keeps playing). Autoplay stays ON but pauses filling (it does not refill the cleared queue; it resumes when you play something again). Use when asked to clear/empty/wipe the queue.",
         parameters: { type: Type.OBJECT, properties: {} },
       },
       {
@@ -162,7 +162,7 @@ export async function openLive(h: LiveHandlers): Promise<Session> {
       responseModalities: [Modality.AUDIO],
       systemInstruction:
         PERSONA +
-        ` You are speaking over voice, so be brief. Chat normally about anything (games, questions, small talk). You ALSO have tools to control the server's music bot, but use them ONLY when the person clearly asks for something music-related (play, queue, skip, radio, etc.). Never steer the conversation toward music or suggest playing something on your own — if the conversation is not about music, do not even mention it. After using a tool, confirm with a very short sentence. Respond in ${languageName}.`,
+        ` You are speaking over voice, so be brief. Chat normally about anything (games, questions, small talk). You ALSO have tools to control the server's music bot, but use them ONLY when the person clearly asks for something music-related (play, queue, skip, radio, etc.). Never steer the conversation toward music or suggest playing something on your own — if the conversation is not about music, do not even mention it. If the person asks for several actions in one request (e.g. "turn off autoplay, clear the queue and play X"), call ALL the needed tools in the SAME turn, in the order they said them, then give a single short confirmation. After using a tool, confirm with a very short sentence. Respond in ${languageName}.`,
       tools: TOOLS as any,
     },
     callbacks: {

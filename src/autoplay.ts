@@ -16,6 +16,10 @@ export function initAutoplay() {
   // Set when the user explicitly stops the music: autoplay then leaves it stopped instead of
   // restarting. Cleared automatically once something is playing again (a fresh play resumes it).
   let stoppedByUser = false;
+  // Set when the user clears the queue: autoplay stays enabled but stops filling/restarting, so it
+  // doesn't refill what was just cleared. Released when the user plays something again (or on
+  // `autoplay on`), not on its own — the current song just plays out.
+  let paused = false;
 
   function remember(title: string) {
     const t = title.toLowerCase();
@@ -36,7 +40,7 @@ export function initAutoplay() {
   }
 
   async function tick() {
-    if (!enabled || running) return;
+    if (!enabled || paused || running) return;
     running = true;
     try {
       const { nowPlaying, upcoming } = await getQueue();
@@ -87,6 +91,7 @@ export function initAutoplay() {
 
   function setEnabled(on: boolean) {
     enabled = on;
+    if (on) paused = false; // turning autoplay on also releases a clear-queue pause
     console.log(`[autoplay] ${on ? "on" : "off"}`);
   }
   return {
@@ -95,6 +100,17 @@ export function initAutoplay() {
     isEnabled: () => enabled,
     onUserStop: () => {
       stoppedByUser = true;
+    },
+    // Pause filling after a queue clear; resume it when the user plays something again.
+    pauseFill: () => {
+      paused = true;
+      console.log("[autoplay] filling paused (queue cleared)");
+    },
+    resumeFill: () => {
+      if (paused) {
+        paused = false;
+        console.log("[autoplay] filling resumed");
+      }
     },
     stop: () => clearInterval(timer),
   };

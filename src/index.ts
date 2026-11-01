@@ -147,6 +147,8 @@ const voice = initVoice(client, {
   setAutoplay: autoplay.setEnabled,
   isAutoplayOn: autoplay.isEnabled,
   onUserStop: autoplay.onUserStop,
+  pauseFill: autoplay.pauseFill,
+  resumeFill: autoplay.resumeFill,
 });
 client.on("voice", voice.onVoice);
 client.on("disconnected", () => {

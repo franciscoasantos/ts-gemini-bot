@@ -35,6 +35,8 @@ transcribes → finds the wake word → opens a Gemini Live session → audio ba
 - `src/autoplay.ts` — keeps the queue topped up with similar songs (Gemini-picked) while music
   plays, refilling in batches when it runs low (one Gemini call per batch), and restarts playback
   if it stops. Toggled by voice (`autoplay_on`/`off`), the `!autoplay [on|off]` command, or `AUTOPLAY`.
+  Clearing the queue (`clear_queue`) pauses its filling — autoplay stays on but doesn't refill the
+  cleared queue; it resumes when the user plays something again (or on `autoplay on`).
 - `src/manager.ts` — TS6 Manager REST client (JWT login, play/queue/radio/etc).
 - `src/audio.ts` — Opus (opusscript/WASM), resample 48↔16k and 24→48k, `Player`, `beep`.
 - `src/filetransfer.ts` — avatar upload via the TS file transfer.
