@@ -5,7 +5,7 @@ const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 // Pinned to a specific model, not the "-latest" alias: the alias silently repoints to the newest
 // Flash (e.g. gemini-3.8-flash, free-tier cap of 20 requests/day), which starves autoplay/chat.
 // The lite tier has its own, larger free-tier quota.
-const TEXT_MODEL = process.env.GEMINI_TEXT_MODEL || "gemini-3.1-flash-lite";
+const TEXT_MODEL = process.env.GEMINI_TEXT_MODEL || "gemini-3.5-flash-lite";
 const LIVE_MODEL = process.env.GEMINI_LIVE_MODEL || "gemini-3.1-flash-live-preview";
 const PERSONA = "You are Gemini, a bot on a TeamSpeak server. Be short and direct.";
 

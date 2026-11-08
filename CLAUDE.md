@@ -61,7 +61,7 @@ transcribes → finds the wake word → opens a Gemini Live session → audio ba
   time) or with billing enabled.
 - **Pin the text model, never a `-latest` alias**: the alias repoints to the newest Flash, which
   can carry a tiny free-tier quota (`gemini-3.8-flash` = 20 requests/day) that autoplay drains in
-  minutes. `GEMINI_TEXT_MODEL` is pinned to a lite model (`gemini-3.1-flash-lite`) for a larger,
+  minutes. `GEMINI_TEXT_MODEL` is pinned to a lite model (`gemini-3.5-flash-lite`) for a larger,
   predictable quota. Older models (2.0/2.5) are retired — if a pinned one 404s "no longer
   available", list `…/v1beta/models` for the key and pin a current one.
 - **Wake word**: whisper-base can't hear "gemini"/"alfredo"/"robô" reliably (it misspells them in
@@ -78,6 +78,10 @@ transcribes → finds the wake word → opens a Gemini Live session → audio ba
   internal to it. Mitigated with an immediate spoken confirmation. Radio is instant.
 - **Avatar**: the file transfer returns "convert error" on some attempts; hence `setAvatarOnce`
   tries only once per process. It's cosmetic.
+- **CPU vs. the co-located TeamSpeak**: the bot shares the deploy VM (2 cores) with the TS6 server.
+  Whisper (`base`) saturates every core while transcribing, starving the TS packet threads → voice
+  and screenshare stutter. `docker-compose.yml` caps the bot at one core (`cpus`) so a core stays
+  free for TS; the trade-off is ~2× slower transcription (wake-word reply).
 
 ## Config (`.env`, see `.env.example`)
 
