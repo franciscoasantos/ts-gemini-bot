@@ -3,6 +3,12 @@ services:
     build: .
     container_name: ts-gemini-bot
     restart: unless-stopped
+    # Cap at one core. Whisper (base) saturates every core on the host while
+    # transcribing speech to find the wake word; on the 2-core deploy VM it
+    # starves the co-located TeamSpeak server's packet threads -> voice and
+    # screenshare stutter. One core stays free for TS. Trade-off: transcription
+    # (so wake-word reply) is ~2x slower. Raise if the host has cores to spare.
+    cpus: "1.0"
     env_file: .env
     volumes:
       - ./data:/app/data
