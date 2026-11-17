@@ -98,8 +98,14 @@ const TOOLS = [
       {
         name: "remove_from_queue",
         description:
-          "Remove a song from the queue by name. Use when asked to remove/take out/cancel a song from the queue.",
-        parameters: searchParam,
+          "Remove a song from the queue. Use when asked to remove/take out/cancel a song from the queue. When the user refers to a song by number ('remove song 1', 'take out the third'), pass `position` — the number shown by list_queue (1 = next song); otherwise pass `query` with the name.",
+        parameters: {
+          type: Type.OBJECT,
+          properties: {
+            position: { type: Type.INTEGER, description: "Queue position as numbered by list_queue (1 = next song)" },
+            query: { type: Type.STRING, description: "Song name/artist to match in the queue" },
+          },
+        },
       },
       {
         name: "list_queue",

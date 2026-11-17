@@ -239,10 +239,11 @@ export function initVoice(client: Ts3Client, deps: VoiceDeps) {
               result = { ok: true, action: "queued", count: queries.length, queries };
             } else if (name === "remove_from_queue") {
               // fast (no download): do it now and report the real outcome
-              const title = await removeFromQueue(q).catch(() => null);
+              const target = args?.position != null ? Number(args.position) : q;
+              const title = await removeFromQueue(target).catch(() => null);
               result = title
                 ? { ok: true, action: "removed", title }
-                : { ok: false, reason: "not_found_in_queue", query: q };
+                : { ok: false, reason: "not_found_in_queue", target };
             } else if (name === "list_queue") {
               const { nowPlaying, upcoming } = await getQueue();
               const LIMIT = 15;

@@ -124,8 +124,20 @@ export async function getQueue(): Promise<{ nowPlaying: string | null; upcoming:
   return { nowPlaying, upcoming };
 }
 
-// Remove from the queue (among the upcoming songs) the first one whose title matches the search.
-export async function removeFromQueue(query: string): Promise<string> {
+// Manager queue index of the upcoming song to remove, or -1. `target` is either the 1-based
+// position as numbered by list_queue (1 = next song after the current one) or a title search.
+export function findRemoveIndex(titles: string[], currentIdx: number, target: string | number): number {
+  if (typeof target === "number") {
+    const i = currentIdx + target;
+    return Number.isInteger(target) && target >= 1 && i < titles.length ? i : -1;
+  }
+  const n = target.toLowerCase().trim();
+  for (let i = currentIdx + 1; i < titles.length; i++) if (titles[i].toLowerCase().includes(n)) return i;
+  return -1;
+}
+
+// Remove an upcoming song by its list_queue position (number) or by title (string).
+export async function removeFromQueue(target: string | number): Promise<string> {
   requireCreds();
   const { id } = await findBot();
   const st: any = await (await ok(await api(`/music-bots/${id}/state`, { method: "GET" }), "state")).json();
@@ -137,20 +149,13 @@ export async function removeFromQueue(query: string): Promise<string> {
       : np
         ? items.map((i) => i.title).lastIndexOf(np)
         : -1;
-  const n = query.toLowerCase().trim();
-  let found = -1;
-  for (let i = idx + 1; i < items.length; i++) {
-    if (
-      String(items[i].title || "")
-        .toLowerCase()
-        .includes(n)
-    ) {
-      found = i;
-      break;
-    }
-  }
-  if (found < 0) throw new Error(`"${query}" is not in the queue`);
-  const title = items[found].title || query;
+  const found = findRemoveIndex(
+    items.map((i) => String(i.title || "")),
+    idx,
+    target,
+  );
+  if (found < 0) throw new Error(`"${target}" is not in the queue`);
+  const title = items[found].title || String(target);
   await ok(await api(`/music-bots/${id}/queue/${found}`, { method: "DELETE" }), "remove");
   return title;
 }
