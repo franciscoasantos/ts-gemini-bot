@@ -85,7 +85,7 @@ transcribes → finds the wake word → opens a Gemini Live session → audio ba
 
 ## Config (`.env`, see `.env.example`)
 
-Required: `TS_HOST`, `GEMINI_API_KEY`, `KWS_DIR`. Reply language: `BOT_LANGUAGE` (default `pt-BR`).
+Required: `TS_HOST`, `GEMINI_API_KEY`, `KWS_DIR`. Reply language: `BOT_LANGUAGE` (default `pt-BR`); timezone for the time Gemini tells: `TZ_OFFSET` (hours, default `-3`).
 Music: `MANAGER_USER`/`MANAGER_PASS` (empty disables it). Autoplay: `AUTOPLAY=1` (also by voice).
 Common tweaks: `WAKE_WORDS`, `WHISPER_PREFIX` (tiny|base|small), `CONVO_IDLE_MS`, `IGNORE_SPEAKERS`,
 `BEEP=0`, `DEBUG_VOICE=1`.

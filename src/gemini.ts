@@ -7,13 +7,24 @@ const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 // The lite tier has its own, larger free-tier quota.
 const TEXT_MODEL = process.env.GEMINI_TEXT_MODEL || "gemini-3.5-flash-lite";
 const LIVE_MODEL = process.env.GEMINI_LIVE_MODEL || "gemini-3.1-flash-live-preview";
+const TZ_OFFSET = Number(process.env.TZ_OFFSET ?? -3); // users' UTC offset in hours (Brasília = -3)
 const PERSONA = "You are Gemini, a bot on a TeamSpeak server. Be short and direct.";
+
+// The users' local date/time as "YYYY-MM-DD HH:MM (UTC-3)". Gemini has no clock of its own and
+// answers in UTC otherwise, so the prompt carries the time at the moment the request/session starts.
+export function localTime(offsetHours: number, now = new Date()): string {
+  const t = new Date(now.getTime() + offsetHours * 3_600_000).toISOString();
+  const sign = offsetHours < 0 ? "-" : "+";
+  return `${t.slice(0, 10)} ${t.slice(11, 16)} (UTC${sign}${Math.abs(offsetHours)})`;
+}
+const clock = () =>
+  ` The users' current local date and time is ${localTime(TZ_OFFSET)}; always give times in this timezone.`;
 
 export async function ask(question: string): Promise<string> {
   const res = await ai.models.generateContent({
     model: TEXT_MODEL,
     contents: question,
-    config: { systemInstruction: `${PERSONA} Respond in ${languageName}. Use plain text, no markdown.` },
+    config: { systemInstruction: `${PERSONA}${clock()} Respond in ${languageName}. Use plain text, no markdown.` },
   });
   return res.text?.trim() || "(no answer)";
 }
@@ -168,6 +179,7 @@ export async function openLive(h: LiveHandlers): Promise<Session> {
       responseModalities: [Modality.AUDIO],
       systemInstruction:
         PERSONA +
+        clock() +
         ` You are speaking over voice, so be brief. Chat normally about anything (games, questions, small talk). You ALSO have tools to control the server's music bot, but use them ONLY when the person clearly asks for something music-related (play, queue, skip, radio, etc.). Never steer the conversation toward music or suggest playing something on your own — if the conversation is not about music, do not even mention it. If the person asks for several actions in one request (e.g. "turn off autoplay, clear the queue and play X"), call ALL the needed tools in the SAME turn, in the order they said them, then give a single short confirmation. After using a tool, confirm with a very short sentence. Respond in ${languageName}.`,
       tools: TOOLS as any,
     },

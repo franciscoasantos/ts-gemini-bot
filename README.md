@@ -65,6 +65,7 @@ another.
 ## Settings (`.env`)
 
 - `BOT_LANGUAGE` — language the bot replies in (e.g. `pt-BR`, `en`). Default `pt-BR`.
+- `TZ_OFFSET` — users' UTC offset in hours, used when Gemini tells the time/date. Default `-3`.
 - `WAKE_WORDS` — accepted variations of the wake word (Whisper misspells it, hence several).
 - `WHISPER_PREFIX` — `tiny`/`base`/`small`. Larger = more accurate and slower; must match the
   model downloaded in the `Dockerfile`.
