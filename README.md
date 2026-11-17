@@ -59,7 +59,7 @@ server uses to recognize it; keep that file.
 
 For the **music** commands, fill `MANAGER_USER`/`MANAGER_PASS` with a TS6 Manager login and
 confirm `MUSIC_BOT_NAME`. The container must reach the Manager backend — `docker-compose.yml`
-already connects it to the `teamspeak_ts6` network; adjust the name if your Manager project uses
+already connects it to the external `teamspeak-net` network; adjust the name if your Manager project uses
 another.
 
 ## Settings (`.env`)

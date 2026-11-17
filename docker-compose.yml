@@ -16,9 +16,9 @@ services:
       - ./avatar.png:/app/avatar.png:ro
     networks:
       - default
-      - ts6
+      - tsnet
 
 networks:
-  ts6:
+  tsnet:
     external: true
-    name: teamspeak_ts6
+    name: teamspeak-net
