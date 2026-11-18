@@ -13,6 +13,7 @@ import {
   playRadio,
   getQueue,
   removeFromQueue,
+  jumpToQueue,
   clearQueue,
   skip,
   stop,
@@ -243,6 +244,13 @@ export function initVoice(client: Ts3Client, deps: VoiceDeps) {
               const title = await removeFromQueue(target).catch(() => null);
               result = title
                 ? { ok: true, action: "removed", title }
+                : { ok: false, reason: "not_found_in_queue", target };
+            } else if (name === "jump_to_queue") {
+              // fast (the queued song is already downloaded): do it now and report the real outcome
+              const target = args?.position != null ? Number(args.position) : q;
+              const title = await jumpToQueue(target).catch(() => null);
+              result = title
+                ? { ok: true, action: "playing_now", title }
                 : { ok: false, reason: "not_found_in_queue", target };
             } else if (name === "list_queue") {
               const { nowPlaying, upcoming } = await getQueue();

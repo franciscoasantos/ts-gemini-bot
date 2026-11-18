@@ -24,6 +24,7 @@ command, and a falling sound when the conversation is released.
 | "play *X* now" | Plays immediately **without losing** the existing queue |
 | "add *X* to the queue" | Enqueues without interrupting |
 | "remove *X* from the queue" / "remove song 1" | Removes the song by name, or by its number in the queue list (1 = next) |
+| "switch to song 2" / "go to the *X* one" | Jumps to that queued song (by number or name) and plays it now |
 | "skip" / "stop" / "pause" / "resume" | Controls playback |
 | "play the *X* radio" | Plays a radio station (by name or genre) — streaming, no wait |
 | "what's in the queue?" | Writes the upcoming songs to the channel chat |

@@ -119,6 +119,18 @@ const TOOLS = [
         },
       },
       {
+        name: "jump_to_queue",
+        description:
+          "Jump to a song that is already in the queue and play it now. Use when asked to switch/go/skip to a queued song ('switch to song 2', 'play number 3 of the queue', 'go to the Daft Punk one'). When the user refers to it by number, pass `position` — the number shown by list_queue (1 = next song); otherwise pass `query` with the name. For a song that is NOT in the queue, use play_now.",
+        parameters: {
+          type: Type.OBJECT,
+          properties: {
+            position: { type: Type.INTEGER, description: "Queue position as numbered by list_queue (1 = next song)" },
+            query: { type: Type.STRING, description: "Song name/artist to match in the queue" },
+          },
+        },
+      },
+      {
         name: "list_queue",
         description:
           "List the queued songs and write them to the channel text chat. Use when asked what is in the queue, what is coming up, or what is playing. The result includes an `autoplay` flag; when you confirm out loud, also say whether autoplay is on or off.",

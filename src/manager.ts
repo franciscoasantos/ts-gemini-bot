@@ -124,9 +124,9 @@ export async function getQueue(): Promise<{ nowPlaying: string | null; upcoming:
   return { nowPlaying, upcoming };
 }
 
-// Manager queue index of the upcoming song to remove, or -1. `target` is either the 1-based
-// position as numbered by list_queue (1 = next song after the current one) or a title search.
-export function findRemoveIndex(titles: string[], currentIdx: number, target: string | number): number {
+// Manager queue index of an upcoming song, or -1. `target` is either the 1-based position as
+// numbered by list_queue (1 = next song after the current one) or a title search.
+export function findQueueIndex(titles: string[], currentIdx: number, target: string | number): number {
   if (typeof target === "number") {
     const i = currentIdx + target;
     return Number.isInteger(target) && target >= 1 && i < titles.length ? i : -1;
@@ -136,8 +136,8 @@ export function findRemoveIndex(titles: string[], currentIdx: number, target: st
   return -1;
 }
 
-// Remove an upcoming song by its list_queue position (number) or by title (string).
-export async function removeFromQueue(target: string | number): Promise<string> {
+// Resolve an upcoming song (list_queue position or title) to its Manager queue index + title.
+async function findUpcoming(target: string | number): Promise<{ id: number; index: number; title: string }> {
   requireCreds();
   const { id } = await findBot();
   const st: any = await (await ok(await api(`/music-bots/${id}/state`, { method: "GET" }), "state")).json();
@@ -149,14 +149,27 @@ export async function removeFromQueue(target: string | number): Promise<string> 
       : np
         ? items.map((i) => i.title).lastIndexOf(np)
         : -1;
-  const found = findRemoveIndex(
+  const index = findQueueIndex(
     items.map((i) => String(i.title || "")),
     idx,
     target,
   );
-  if (found < 0) throw new Error(`"${target}" is not in the queue`);
-  const title = items[found].title || String(target);
-  await ok(await api(`/music-bots/${id}/queue/${found}`, { method: "DELETE" }), "remove");
+  if (index < 0) throw new Error(`"${target}" is not in the queue`);
+  return { id, index, title: items[index].title || String(target) };
+}
+
+// Remove an upcoming song by its list_queue position (number) or by title (string).
+export async function removeFromQueue(target: string | number): Promise<string> {
+  const { id, index, title } = await findUpcoming(target);
+  await ok(await api(`/music-bots/${id}/queue/${index}`, { method: "DELETE" }), "remove");
+  return title;
+}
+
+// Jump to an upcoming song (list_queue position or title) and play it now. The songs jumped over
+// stay behind as already played, like a skip.
+export async function jumpToQueue(target: string | number): Promise<string> {
+  const { id, index, title } = await findUpcoming(target);
+  await ok(await api(`/music-bots/${id}/queue/${index}/play`, { method: "POST" }), "queue-play");
   return title;
 }
 
