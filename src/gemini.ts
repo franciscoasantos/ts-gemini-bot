@@ -179,6 +179,12 @@ const TOOLS = [
         description: "Turn off autoplay (stop auto-filling the queue).",
         parameters: { type: Type.OBJECT, properties: {} },
       },
+      {
+        name: "end_conversation",
+        description:
+          "End the voice conversation right away. Use when the person says goodbye or signals they are done (e.g. 'bye', 'that's all', 'thanks, that's it'). Then say a very short goodbye.",
+        parameters: { type: Type.OBJECT, properties: {} },
+      },
     ],
   },
 ];
@@ -192,7 +198,7 @@ export async function openLive(h: LiveHandlers): Promise<Session> {
       systemInstruction:
         PERSONA +
         clock() +
-        ` You are speaking over voice, so be brief. Chat normally about anything (games, questions, small talk). You ALSO have tools to control the server's music bot, but use them ONLY when the person clearly asks for something music-related (play, queue, skip, radio, etc.). Never steer the conversation toward music or suggest playing something on your own — if the conversation is not about music, do not even mention it. If the person asks for several actions in one request (e.g. "turn off autoplay, clear the queue and play X"), call ALL the needed tools in the SAME turn, in the order they said them, then give a single short confirmation. After using a tool, confirm with a very short sentence. Respond in ${languageName}.`,
+        ` You are speaking over voice, so be brief. Chat normally about anything (games, questions, small talk). You ALSO have tools to control the server's music bot, but use them ONLY when the person clearly asks for something music-related (play, queue, skip, radio, etc.). Never steer the conversation toward music or suggest playing something on your own — if the conversation is not about music, do not even mention it. When the person says goodbye or is done, call end_conversation. If the person asks for several actions in one request (e.g. "turn off autoplay, clear the queue and play X"), call ALL the needed tools in the SAME turn, in the order they said them, then give a single short confirmation. After using a tool, confirm with a very short sentence. Respond in ${languageName}.`,
       tools: TOOLS as any,
     },
     callbacks: {

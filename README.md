@@ -6,8 +6,9 @@ text, and can also voice-control the server's music bot (via the TS6 Manager).
 ## What it does
 
 **Voice.** Say the wake word (**"gemini"** or **"ok google"**) and then speak, in any language.
-Gemini replies out loud in the channel and keeps the conversation context; after a few seconds of
-silence the session ends on its own and releases for someone else. The language Gemini *replies
+Gemini replies out loud in the channel and keeps the conversation context. Say goodbye ("bye",
+"that's all") to end it right away; otherwise, after a few seconds of silence the session ends on
+its own and releases for someone else. The language Gemini *replies
 in* is set by `BOT_LANGUAGE` (default Brazilian Portuguese).
 
 Audio cues: a short rising sound when it hears you, a "tururum" when it recognizes a music
@@ -26,8 +27,7 @@ command, and a falling sound when the conversation is released.
 | "switch to song 2" / "go to the *X* one" | Jumps to that queued song (by number or name) and plays it now |
 | "skip" / "stop" / "pause" / "resume" | Controls playback |
 | "play the *X* radio" | Plays a radio station (by name or genre) — streaming, no wait |
-| "what's in the queue?" | Writes the upcoming songs to the channel chat |
-| "write *X* in the chat" | Posts a message to the channel chat |
+| "what's in the queue?" | Writes the upcoming songs to the channel chat || "write *X* in the chat" | Posts a message to the channel chat |
 
 (The examples are in English, but the bot understands requests in any language and replies in
 `BOT_LANGUAGE`.)

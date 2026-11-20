@@ -30,7 +30,7 @@ transcribes → finds the wake word → opens a Gemini Live session → audio ba
 - `src/voice.ts` — the voice pipeline and conversation state (locks to the caller, releases on
   silence) plus the music tool handler. Exposed via `initVoice(client, { sendText, isIgnored })`.
 - `src/gemini.ts` — `ask()` (text, `generateContent`) and `openLive()` (voice, Live API).
-  `PERSONA`, `TOOLS` (music functionDeclarations) and the `systemInstruction` live here.
+  `PERSONA`, `TOOLS` (music functionDeclarations + `end_conversation`, called on a goodbye) and the `systemInstruction` live here.
 - `src/i18n.ts` — `BOT_LANGUAGE`: the prompt's language name and the few bot-written strings.
 - `src/autoplay.ts` — keeps the queue topped up with similar songs (Gemini-picked) while music
   plays, refilling in batches when it runs low (one Gemini call per batch), and restarts playback

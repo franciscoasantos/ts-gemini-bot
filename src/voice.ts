@@ -132,7 +132,9 @@ export function initVoice(client: Ts3Client, deps: VoiceDeps) {
   let pending: Int16Array[] = []; // audio captured while the Live session connects
   let silenceTimer: NodeJS.Timeout | undefined; // marks the end of each utterance
   let convoTimer: NodeJS.Timeout | undefined; // ends the conversation after a long silence
-  let closeAfterTurn = false; // close the session after a command's confirmation is spoken
+  // Runs once Gemini finishes speaking the current turn (closes the session after a command's
+  // confirmation or a goodbye); null = keep the conversation going.
+  let afterTurn: (() => void) | null = null;
   const CONVO_IDLE_MS = Number(env.CONVO_IDLE_MS || 12000); // auto-unlock after this much silence
   // Music actions run through this chain so a compound request ("clear the queue then play X")
   // executes in the order received instead of racing. Each step catches its own error so one
@@ -144,6 +146,17 @@ export function initVoice(client: Ts3Client, deps: VoiceDeps) {
     session!.sendRealtimeInput({ audio: { data, mimeType: "audio/pcm;rate=16000" } });
   }
 
+  // Falling = "released". Queued after whatever audio is still playing.
+  function releasedBeep() {
+    if (env.BEEP !== "0")
+      player.push(
+        beep([
+          { f: 784, ms: 110 },
+          { f: 587, ms: 170 },
+        ]),
+      );
+  }
+
   // End of conversation: stop listening and close the session (resets context).
   function endConversation() {
     console.log("[voice] conversation ended (silence)");
@@ -151,13 +164,14 @@ export function initVoice(client: Ts3Client, deps: VoiceDeps) {
     clearTimeout(silenceTimer);
     player.clear();
     session?.close();
-    if (env.BEEP !== "0")
-      player.push(
-        beep([
-          { f: 784, ms: 110 },
-          { f: 587, ms: 170 },
-        ]),
-      ); // falling = "released"
+    releasedBeep();
+  }
+
+  // Goodbye: close after the spoken farewell, keeping it audible, then the released beep.
+  function endConversationBye() {
+    console.log("[voice] conversation ended (goodbye)");
+    endConversationQuiet();
+    releasedBeep();
   }
 
   // End the conversation immediately, without the exit beep and without clearing the audio queue
@@ -203,14 +217,22 @@ export function initVoice(client: Ts3Client, deps: VoiceDeps) {
         session = await openLive({
           audio: (pcm) => player.push(up24to48stereo(pcm)),
           turnComplete: () => {
-            // After a music command, Gemini speaks the confirmation and THEN the session closes.
-            if (closeAfterTurn) {
-              closeAfterTurn = false;
-              endConversationQuiet();
+            // After a music command or a goodbye, Gemini speaks first and THEN the session closes.
+            if (afterTurn) {
+              const end = afterTurn;
+              afterTurn = null;
+              end();
             } else keepAlive();
           },
           interrupted: () => player.clear(),
           onTool: async (name, args) => {
+            // Goodbye: Gemini speaks it, then the session closes without waiting for CONVO_IDLE_MS.
+            if (name === "end_conversation") {
+              afterTurn = endConversationBye;
+              clearTimeout(convoTimer);
+              convoTimer = setTimeout(endConversationBye, 10000); // safety, in case turnComplete never arrives
+              return { ok: true, action: "conversation_ended" };
+            }
             const beeps = env.BEEP !== "0";
             // "tururum" = command recognized (instant feedback until the voice comes out)
             if (beeps)
@@ -319,7 +341,7 @@ export function initVoice(client: Ts3Client, deps: VoiceDeps) {
               result = { ok: true, action: a.action, ...(q ? { query: q } : {}) };
             }
             // Heavy action (download ~10s) runs in the background; Gemini confirms by voice now and
-            // the session closes right after that confirmation (closeAfterTurn), not during the download.
+            // the session closes right after that confirmation (afterTurn), not during the download.
             actionChain = actionChain
               .then(() => run())
               .catch((e) => {
@@ -332,7 +354,7 @@ export function initVoice(client: Ts3Client, deps: VoiceDeps) {
                     ]),
                   ); // only on failure
               });
-            closeAfterTurn = true;
+            afterTurn = endConversationQuiet;
             clearTimeout(convoTimer);
             convoTimer = setTimeout(endConversationQuiet, 10000); // safety, in case turnComplete never arrives
             return result;
@@ -340,6 +362,7 @@ export function initVoice(client: Ts3Client, deps: VoiceDeps) {
           closed: () => {
             session = null;
             listener = null;
+            afterTurn = null; // a dropped session must not end the next conversation's first turn
             clearTimeout(convoTimer);
           },
         });
