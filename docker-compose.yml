@@ -12,7 +12,6 @@ services:
     env_file: .env
     volumes:
       - ./data:/app/data
-      - ./keywords.txt:/app/keywords.txt:ro
       - ./avatar.png:/app/avatar.png:ro
     networks:
       - default
