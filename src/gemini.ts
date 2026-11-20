@@ -151,7 +151,12 @@ const TOOLS = [
         description: "Skip to the next song in the queue.",
         parameters: { type: Type.OBJECT, properties: {} },
       },
-      { name: "stop_music", description: "Stop music playback.", parameters: { type: Type.OBJECT, properties: {} } },
+      {
+        name: "stop_music",
+        description:
+          "Stop music playback for good: cancels the current song (it can't be continued later). Use ONLY when the person explicitly says stop/end the music. If they want to pause or hold it to continue later, use pause_music instead.",
+        parameters: { type: Type.OBJECT, properties: {} },
+      },
       {
         name: "clear_queue",
         description:
@@ -160,12 +165,14 @@ const TOOLS = [
       },
       {
         name: "pause_music",
-        description: "Pause the current song.",
+        description:
+          "Pause the current song at its current position, so it can be continued later with resume_music. Use when the person says pause, hold on, wait a moment. Prefer this over stop_music unless they explicitly want to stop/cancel the music.",
         parameters: { type: Type.OBJECT, properties: {} },
       },
       {
         name: "resume_music",
-        description: "Resume the paused song.",
+        description:
+          "Continue the paused song from where it was paused. Use when the person says resume, continue, unpause, play again after a pause.",
         parameters: { type: Type.OBJECT, properties: {} },
       },
       {
