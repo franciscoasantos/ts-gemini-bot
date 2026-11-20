@@ -133,7 +133,7 @@ const TOOLS = [
       {
         name: "list_queue",
         description:
-          "List the queued songs and write them to the channel text chat. Use when asked what is in the queue, what is coming up, or what is playing. The result includes an `autoplay` flag; when you confirm out loud, also say whether autoplay is on or off.",
+          "List the queued songs and write them to the channel text chat. Use when asked what is in the queue or what is coming up. The result includes an `autoplay` flag; when you confirm out loud, also say whether autoplay is on or off.",
         parameters: { type: Type.OBJECT, properties: {} },
       },
       {
@@ -177,6 +177,12 @@ const TOOLS = [
       {
         name: "autoplay_off",
         description: "Turn off autoplay (stop auto-filling the queue).",
+        parameters: { type: Type.OBJECT, properties: {} },
+      },
+      {
+        name: "now_playing",
+        description:
+          "Get the title of the song the music bot is playing right now. Call it whenever the person asks about the current song (what song is this, who sings it, what is it about, when was it released, etc.) — the song changes over time, so call it again on each such question. Then answer from your own knowledge of that song.",
         parameters: { type: Type.OBJECT, properties: {} },
       },
       {

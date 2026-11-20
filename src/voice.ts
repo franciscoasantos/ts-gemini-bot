@@ -233,6 +233,11 @@ export function initVoice(client: Ts3Client, deps: VoiceDeps) {
               convoTimer = setTimeout(endConversationBye, 10000); // safety, in case turnComplete never arrives
               return { ok: true, action: "conversation_ended" };
             }
+            // A lookup, not a command: no beep, and the conversation stays open for follow-up questions.
+            if (name === "now_playing") {
+              const { nowPlaying } = await getQueue();
+              return nowPlaying ? { ok: true, title: nowPlaying } : { ok: false, reason: "nothing_playing" };
+            }
             const beeps = env.BEEP !== "0";
             // "tururum" = command recognized (instant feedback until the voice comes out)
             if (beeps)

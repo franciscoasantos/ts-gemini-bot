@@ -27,7 +27,9 @@ command, and a falling sound when the conversation is released.
 | "switch to song 2" / "go to the *X* one" | Jumps to that queued song (by number or name) and plays it now |
 | "skip" / "stop" / "pause" / "resume" | Controls playback |
 | "play the *X* radio" | Plays a radio station (by name or genre) — streaming, no wait |
-| "what's in the queue?" | Writes the upcoming songs to the channel chat || "write *X* in the chat" | Posts a message to the channel chat |
+| "what's in the queue?" | Writes the upcoming songs to the channel chat |
+| "what song is this?" / "who sings it?" | Looks up the song playing now and answers about it; the conversation stays open for more questions |
+| "write *X* in the chat" | Posts a message to the channel chat |
 
 (The examples are in English, but the bot understands requests in any language and replies in
 `BOT_LANGUAGE`.)
