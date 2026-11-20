@@ -1,7 +1,7 @@
 # CLAUDE.md
 
 Gemini bot for TeamSpeak 6: joins the server as a real voice client, talks by voice (wake word
-"ok google") and text, and voice-controls the server's music bot (via the TS6 Manager API).
+"gemini" or "ok google") and text, and voice-controls the server's music bot (via the TS6 Manager API).
 
 The repo is in English. The language the bot *replies to users in* is set by `BOT_LANGUAGE`
 (default `pt-BR`) — see `src/i18n.ts`.
@@ -23,7 +23,7 @@ npm start            # run locally (reads .env)
 
 ## Architecture
 
-Voice pipeline: TS Opus packet → decode → VAD (silero) slices the speech → Whisper-PT
+Voice pipeline: TS Opus packet → decode → VAD (silero) slices the speech → Whisper (English)
 transcribes → finds the wake word → opens a Gemini Live session → audio back.
 
 - `src/index.ts` — orchestrates: connection/reconnection, text, wiring, client tracking.
@@ -64,10 +64,16 @@ transcribes → finds the wake word → opens a Gemini Live session → audio ba
   minutes. `GEMINI_TEXT_MODEL` is pinned to a lite model (`gemini-3.5-flash-lite`) for a larger,
   predictable quota. Older models (2.0/2.5) are retired — if a pinned one 404s "no longer
   available", list `…/v1beta/models` for the key and pin a current one.
-- **Wake word**: whisper-base can't hear "gemini"/"alfredo"/"robô" reliably (it misspells them in
-  PT). Hence the trigger is "ok google", which it always gets right. `WAKE_WORDS` is a regex
-  tested against the PT transcription (lowercased); moving to whisper-small improves accuracy but
-  makes the reply start slower.
+- **Wake word**: "gemini" or "ok google". Whisper transcribes in English (`WAKE_LANGUAGE=en`)
+  for detection only: forced to PT, whisper-base misspells "gemini" and translates English speech.
+  Forced to English it translates PT speech, so a wake word must be a name, never a translatable
+  common word ("computer" fires on "computador"). Don't use whisper-small: on one core it
+  transcribes slower than real time and the wake word lags. `WAKE_WORDS` is a regex tested against
+  the lowercased transcription.
+- **VAD timing**: the VAD fires ~200 ms into speech and TS sends nothing during silence, so
+  `voice.ts` re-cuts each segment from a per-speaker history with 400 ms pre-roll and flushes the
+  VAD after a 300 ms packet gap. Without these the first syllable is lost and the wake word waits
+  for the next utterance.
 - **Music bot audio**: the music arrives as "voice" and disturbs detection. `index.ts` ignores the
   audio of whoever is in `IGNORE_SPEAKERS`/`MUSIC_BOT_NAME` (default "DJ Morri").
 - **PID 1 / SIGTERM**: the Dockerfile `CMD` is `node --import tsx` (not `npx`) so Node gets
@@ -87,5 +93,5 @@ transcribes → finds the wake word → opens a Gemini Live session → audio ba
 
 Required: `TS_HOST`, `GEMINI_API_KEY`, `KWS_DIR`. Reply language: `BOT_LANGUAGE` (default `pt-BR`); timezone for the time Gemini tells: `TZ_OFFSET` (hours, default `-3`).
 Music: `MANAGER_USER`/`MANAGER_PASS` (empty disables it). Autoplay: `AUTOPLAY=1` (also by voice).
-Common tweaks: `WAKE_WORDS`, `WHISPER_PREFIX` (tiny|base|small), `CONVO_IDLE_MS`, `IGNORE_SPEAKERS`,
+Common tweaks: `WAKE_WORDS`, `WAKE_LANGUAGE` (default `en`), `WHISPER_PREFIX` (tiny|base|small), `CONVO_IDLE_MS`, `IGNORE_SPEAKERS`,
 `BEEP=0`, `DEBUG_VOICE=1`.

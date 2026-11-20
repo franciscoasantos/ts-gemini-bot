@@ -1,6 +1,6 @@
 import { test, expect } from "vitest";
 import OpusScript from "opusscript";
-import { beep, down48to16, parseVoice, Player, up24to48stereo } from "./audio.js";
+import { beep, down48to16, parseVoice, Player, ringSlice, ringWrite, up24to48stereo } from "./audio.js";
 
 const FRAME = 960; // 20 ms @ 48 kHz
 const FRAME_BYTES = FRAME * 2 * 2; // stereo, 16-bit
@@ -9,6 +9,15 @@ test("parseVoice extracts clientId, codec and opus; rejects a short packet", () 
   const pkt = Buffer.from([0, 7, 0, 42, 5, 0xaa, 0xbb]);
   expect(parseVoice(pkt)).toEqual({ clientId: 42, codec: 5, opus: Buffer.from([0xaa, 0xbb]) });
   expect(parseVoice(Buffer.from([1, 2, 3]))).toBeNull();
+});
+
+test("ring keeps the latest samples by absolute index across wraparound", () => {
+  const r = { buf: new Float32Array(4), fed: 0 };
+  ringWrite(r, Float32Array.from([1, 2, 3]));
+  ringWrite(r, Float32Array.from([4, 5, 6])); // wraps: holds indices 2..5 = [3,4,5,6]
+  expect([...ringSlice(r, 3, 5)]).toEqual([4, 5]);
+  expect([...ringSlice(r, 0, 6)]).toEqual([3, 4, 5, 6]); // clamped to what's still held
+  expect([...ringSlice(r, 5, 99)]).toEqual([6]);
 });
 
 test("down48to16 averages groups of 3 samples", () => {

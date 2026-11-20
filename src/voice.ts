@@ -2,7 +2,7 @@ import { createRequire } from "node:module";
 import OpusScript from "opusscript";
 import type { Session } from "@google/genai";
 import type { Ts3Client } from "./tslib/index.js";
-import { Player, beep, down48to16, parseVoice, up24to48stereo } from "./audio.js";
+import { Player, type Ring, beep, down48to16, parseVoice, ringSlice, ringWrite, up24to48stereo } from "./audio.js";
 import { openLive } from "./gemini.js";
 import { t } from "./i18n.js";
 import {
@@ -38,19 +38,22 @@ interface VoiceDeps {
 }
 
 /**
- * Wires up the voice pipeline (wake word via VAD + Whisper-PT → Gemini Live → audio back)
+ * Wires up the voice pipeline (wake word via VAD + Whisper → Gemini Live → audio back)
  * and returns the "voice" event handler plus a reset (for reconnects). Call once at boot.
  */
 export function initVoice(client: Ts3Client, deps: VoiceDeps) {
   const { sendText, isIgnored, setAutoplay, isAutoplayOn, onUserStop, pauseFill, resumeFill } = deps;
 
-  // ---------- Wake word via VAD + Whisper-PT (transcribe and look for the trigger word) ----------
+  // ---------- Wake word via VAD + Whisper (transcribe and look for the trigger word) ----------
   const MODEL = env.KWS_DIR!;
-  // Fires when the PT transcription contains one of these words.
-  const WAKE = new RegExp(
-    env.WAKE_WORDS || "gemini|gemin|jemin|jimin|jimi|zemain|gize|gêmeos|ok google|\\bgoogle\\b",
-    "i",
-  );
+  // Fires when the transcription contains one of these words.
+  const WAKE = new RegExp(env.WAKE_WORDS || "ok(ay)?,? google|gemini", "i");
+  // Transcription language for wake-word detection only (the conversation itself goes to Gemini
+  // Live in any language). English: whisper-base gets English words and names right far more often
+  // than in PT, where it misspells "gemini" and even translates English speech. Forced to English it
+  // translates PT speech instead, so a wake word must not be a translatable common word
+  // ("computer" would fire on "computador"); a name like "gemini" is safe.
+  const WAKE_LANGUAGE = env.WAKE_LANGUAGE || "en";
   const WP = env.WHISPER_PREFIX || "base"; // tiny | base | small
   const recognizer = new sherpa.OfflineRecognizer({
     featConfig: { sampleRate: 16000, featureDim: 80 },
@@ -58,7 +61,7 @@ export function initVoice(client: Ts3Client, deps: VoiceDeps) {
       whisper: {
         encoder: `${MODEL}/${WP}-encoder.int8.onnx`,
         decoder: `${MODEL}/${WP}-decoder.int8.onnx`,
-        language: "pt",
+        language: WAKE_LANGUAGE,
         task: "transcribe",
       },
       tokens: `${MODEL}/${WP}-tokens.txt`,
@@ -87,13 +90,25 @@ export function initVoice(client: Ts3Client, deps: VoiceDeps) {
     );
   }
 
-  type Speaker = { dec: OpusScript; vad: any };
+  // TS sends no packets while someone is silent, so the VAD never sees the trailing silence it
+  // needs to close a segment. After this gap with no packets, flush it so the utterance is
+  // transcribed right away instead of waiting for the next time that person speaks.
+  const FLUSH_GAP_MS = 300;
+  // The VAD fires a bit into the speech, so its segment misses the first syllable ("abacate" →
+  // "cate"). Each segment is re-cut from the speaker's history with this much audio in front.
+  const PRE_ROLL = 16000 * 0.4;
+  const HISTORY = 16000 * 10; // > maxSpeechDuration + PRE_ROLL
+  type Speaker = { dec: OpusScript; vad: any; hist: Ring; flushTimer?: NodeJS.Timeout };
   // ponytail: one decoder+VAD per clid ever seen, never freed; prune on notifyclientleftview if it grows.
   const speakers = new Map<number, Speaker>();
   function speaker(clid: number): Speaker {
     let s = speakers.get(clid);
     if (!s) {
-      s = { dec: new OpusScript(48000, 1), vad: makeVad() };
+      s = {
+        dec: new OpusScript(48000, 1),
+        vad: makeVad(),
+        hist: { buf: new Float32Array(HISTORY), fed: 0 },
+      };
       speakers.set(clid, s);
     }
     return s;
@@ -372,24 +387,37 @@ export function initVoice(client: Ts3Client, deps: VoiceDeps) {
         for (const k in voiceDbg) voiceDbg[+k] = 0;
       }
     }
-    // VAD segments the speech; each segment is transcribed (PT) and we look for the wake word in the text.
+    // VAD segments the speech; each segment is transcribed and we look for the wake word in the text.
     const samples = new Float32Array(pcm.length);
     for (let i = 0; i < pcm.length; i++) samples[i] = pcm[i] / 32768;
+    ringWrite(s.hist, samples);
     for (let i = 0; i < samples.length; i += VAD_WINDOW) {
       s.vad.acceptWaveform(samples.subarray(i, i + VAD_WINDOW));
     }
+    clearTimeout(s.flushTimer);
+    s.flushTimer = setTimeout(() => {
+      s.vad.flush();
+      transcribeSegments(v.clientId, s);
+    }, FLUSH_GAP_MS);
+    transcribeSegments(v.clientId, s);
+  }
+
+  function transcribeSegments(clid: number, s: Speaker) {
     while (!s.vad.isEmpty()) {
       const seg = s.vad.front();
       s.vad.pop();
       if (listener !== null) continue; // already triggered in the meantime
+      const audio = ringSlice(s.hist, seg.start - PRE_ROLL, seg.start + seg.samples.length);
       const st = recognizer.createStream();
-      st.acceptWaveform({ sampleRate: 16000, samples: seg.samples });
+      st.acceptWaveform({ sampleRate: 16000, samples: audio });
       recognizer.decode(st);
       const text = (recognizer.getResult(st).text || "").toLowerCase().trim();
-      if (text && env.DEBUG_VOICE === "1") console.log(`[asr ${v.clientId}] ${text}`);
+      if (text && env.DEBUG_VOICE === "1") {
+        console.log(`[asr ${clid}] ${(audio.length / 16000).toFixed(2)}s ${text}`);
+      }
       if (text && WAKE.test(text)) {
-        console.log(`[wake] ${v.clientId}: "${text}"`);
-        void startListening(v.clientId);
+        console.log(`[wake] ${clid}: "${text}"`);
+        void startListening(clid);
       }
     }
   }

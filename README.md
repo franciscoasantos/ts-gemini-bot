@@ -5,11 +5,10 @@ text, and can also voice-control the server's music bot (via the TS6 Manager).
 
 ## What it does
 
-**Voice.** Say the wake word (**"ok google"**) and then speak. Gemini replies out loud in the
-channel and keeps the conversation context; after a few seconds of silence the session ends on
-its own and releases for someone else. Recognition runs in **Portuguese** (Whisper), so it
-understands Brazilian pronunciation. The language Gemini *replies in* is set by `BOT_LANGUAGE`
-(default Brazilian Portuguese).
+**Voice.** Say the wake word (**"gemini"** or **"ok google"**) and then speak, in any language.
+Gemini replies out loud in the channel and keeps the conversation context; after a few seconds of
+silence the session ends on its own and releases for someone else. The language Gemini *replies
+in* is set by `BOT_LANGUAGE` (default Brazilian Portuguese).
 
 Audio cues: a short rising sound when it hears you, a "tururum" when it recognizes a music
 command, and a falling sound when the conversation is released.
@@ -67,7 +66,10 @@ another.
 
 - `BOT_LANGUAGE` — language the bot replies in (e.g. `pt-BR`, `en`). Default `pt-BR`.
 - `TZ_OFFSET` — users' UTC offset in hours, used when Gemini tells the time/date. Default `-3`.
-- `WAKE_WORDS` — accepted variations of the wake word (Whisper misspells it, hence several).
+- `WAKE_WORDS` — regex of accepted wake-word transcriptions. Default `ok(ay)?,? google|gemini`.
+- `WAKE_LANGUAGE` — language Whisper transcribes in to spot the wake word (default `en`, where
+  whisper-base is most accurate). It translates speech in other languages, so pick a name as the
+  wake word, not a common word.
 - `WHISPER_PREFIX` — `tiny`/`base`/`small`. Larger = more accurate and slower; must match the
   model downloaded in the `Dockerfile`.
 - `CONVO_IDLE_MS` — silence (ms) until the conversation ends.
@@ -87,4 +89,4 @@ another.
 ## Verification
 
 - `npm run check` — lint (oxlint) + `tsc --noEmit` + tests (Vitest).
-- In TeamSpeak: `!gemini hi` in the channel; a direct message; "ok google" + a command.
+- In TeamSpeak: `!gemini hi` in the channel; a direct message; "gemini" + a command.

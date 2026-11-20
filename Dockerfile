@@ -11,7 +11,7 @@ WORKDIR /app
 COPY package.json package-lock.json* ./
 RUN npm install
 
-# Multilingual Whisper (base) to transcribe PT + silero VAD
+# Multilingual Whisper (base) for the wake word + silero VAD
 RUN MODEL=sherpa-onnx-whisper-base \
  && wget -q "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/${MODEL}.tar.bz2" \
  && tar xjf "${MODEL}.tar.bz2" \

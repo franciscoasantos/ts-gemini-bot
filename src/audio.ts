@@ -20,6 +20,25 @@ export function down48to16(pcm: Buffer): Int16Array {
   return out;
 }
 
+// Fixed-size history of the most recent samples, addressed by absolute sample index
+// (`fed` = how many samples were ever written). Lets the wake-word path add pre-roll in front of
+// a VAD segment: the VAD only fires ~200 ms into speech, so its segment starts mid-syllable.
+export type Ring = { buf: Float32Array; fed: number };
+
+export function ringWrite(r: Ring, samples: Float32Array) {
+  for (let i = 0; i < samples.length; i++) r.buf[(r.fed + i) % r.buf.length] = samples[i];
+  r.fed += samples.length;
+}
+
+// Samples [from, to) by absolute index, clamped to what the ring still holds.
+export function ringSlice(r: Ring, from: number, to: number): Float32Array {
+  from = Math.max(from, r.fed - r.buf.length, 0);
+  to = Math.min(to, r.fed);
+  const out = new Float32Array(Math.max(0, to - from));
+  for (let i = 0; i < out.length; i++) out[i] = r.buf[(from + i) % r.buf.length];
+  return out;
+}
+
 // 24 kHz mono → 48 kHz stereo (each sample → 2 time steps × L/R).
 // ponytail: sample duplication, swap for a proper resampler if it sounds harsh.
 export function up24to48stereo(pcm: Buffer): Buffer {
