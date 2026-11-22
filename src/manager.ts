@@ -68,16 +68,70 @@ function requireCreds() {
   if (!USER || !PASS) throw new Error("MANAGER_USER/MANAGER_PASS not set in .env");
 }
 
+export interface SearchResult {
+  id: string;
+  title: string;
+  artist: string; // uploader/channel
+  duration: number; // seconds, 0 = unknown
+}
+
+// Words that mark a result as "not the song itself", unless the user asked for it.
+const JUNK =
+  /\b(reaction|react|reagindo|cover|karaoke|tutorial|aula|como tocar|lesson|instrumental|8d|slowed|sped up|nightcore|bass boosted|remix|live|ao vivo|1 hour|10 hours|full album|album completo|mix|playlist|podcast|review|interview|entrevista|trailer|shorts)\b/i;
+
+// Pick the result most likely to be the song the user wants. YouTube's own rank is the base;
+// junk words, non-song durations and poor query overlap push a result down; official sources
+// ("- Topic", VEVO, "official") push it up.
+// ponytail: keyword heuristic, no view counts (the Manager's search drops them); add a view_count
+// field upstream in the Manager if popularity ranking is ever needed.
+export function pickBestResult(query: string, results: SearchResult[]): SearchResult | undefined {
+  const q = query.toLowerCase();
+  const words = q.split(/[^\p{L}\p{N}]+/u).filter((w) => w.length > 2);
+  const wantsLong = /\b(mix|album|hour|hora|playlist)\b/.test(q);
+  let best: SearchResult | undefined;
+  let bestScore = -Infinity;
+  results.forEach((r, i) => {
+    if (!/^[A-Za-z0-9_-]{11}$/.test(r.id)) return; // channels/playlists aren't playable songs
+    const title = r.title.toLowerCase();
+    const artist = r.artist.toLowerCase();
+    let s = -i; // keep YouTube's relevance order as the tie-breaker
+    const junk = title.match(JUNK)?.[0];
+    if (junk && !q.includes(junk.toLowerCase())) s -= 6;
+    if (r.duration && !wantsLong && (r.duration < 60 || r.duration > 600)) s -= 5;
+    if (/ - topic$|vevo/.test(artist)) s += 3;
+    if (/official|oficial/.test(title)) s += 2;
+    if (words.length) s += (4 * words.filter((w) => title.includes(w) || artist.includes(w)).length) / words.length;
+    if (s > bestScore) [best, bestScore] = [r, s];
+  });
+  return best;
+}
+
+// Search YouTube via the Manager and return the best-matching result.
+async function findBest(query: string): Promise<SearchResult> {
+  const { configId } = await findBot();
+  const sr = await ok(
+    await api(`/servers/${configId}/music-library/youtube/search`, { method: "POST", body: JSON.stringify({ query }) }),
+    "search",
+  );
+  const results = await sr.json();
+  const best = pickBestResult(query, Array.isArray(results) ? results : results.results || []);
+  if (!best) throw new Error("nothing found on YouTube");
+  console.log(`[music] "${query}" → "${best.title}" (${best.artist})`);
+  return best;
+}
+
 // Play now (interrupting the current one) a song by name. Returns the title.
 export async function playMusic(query: string): Promise<string> {
   requireCreds();
   const { id } = await findBot();
+  const best = await findBest(query);
+  const url = `https://www.youtube.com/watch?v=${best.id}`;
   const r = await ok(
-    await api(`/music-bots/${id}/play-url`, { method: "POST", body: JSON.stringify({ url: `ytsearch1:${query}` }) }),
+    await api(`/music-bots/${id}/play-url`, { method: "POST", body: JSON.stringify({ url }) }),
     "play-url",
   );
   const j: any = await r.json().catch(() => ({}));
-  return j?.queueItem?.title || query;
+  return j?.queueItem?.title || best.title || query;
 }
 
 // Play the song NOW without losing the queue: snapshot the upcoming songs, add and play the new
@@ -236,10 +290,7 @@ export async function enqueueMusic(query: string): Promise<string> {
   requireCreds();
   const { id, configId } = await findBot();
   const lib = `/servers/${configId}/music-library/youtube`;
-  const sr = await ok(await api(`${lib}/search`, { method: "POST", body: JSON.stringify({ query }) }), "search");
-  const results = await sr.json();
-  const first = (Array.isArray(results) ? results : results.results || [])[0];
-  if (!first?.id) throw new Error("nothing found on YouTube");
+  const first = await findBest(query);
   const url = `https://www.youtube.com/watch?v=${first.id}`;
   const dr = await ok(await api(`${lib}/download`, { method: "POST", body: JSON.stringify({ url }) }), "download");
   const song: any = await dr.json();

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { findQueueIndex } from "./manager.js";
+import { findQueueIndex, pickBestResult } from "./manager.js";
 
 describe("findQueueIndex", () => {
   // played: a, b | current: c (index 2) | upcoming: d (1), e (2)
@@ -20,5 +20,48 @@ describe("findQueueIndex", () => {
     expect(findQueueIndex(titles, 2, "daft")).toBe(3);
     expect(findQueueIndex(titles, 2, "a")).toBe(3); // "Daft Punk" contains "a"; played "a" is skipped
     expect(findQueueIndex(titles, 2, "zzz")).toBe(-1);
+  });
+});
+
+describe("pickBestResult", () => {
+  const r = (id: string, title: string, artist = "x", duration = 200) => ({
+    id: id.padEnd(11, "0"),
+    title,
+    artist,
+    duration,
+  });
+
+  it("skips reactions/covers and prefers the official upload", () => {
+    const best = pickBestResult("Queen - Bohemian Rhapsody", [
+      r("a", "REACTING to Queen Bohemian Rhapsody", "Some Guy", 900),
+      r("b", "Bohemian Rhapsody (cover)", "Singer"),
+      r("c", "Bohemian Rhapsody", "Queen - Topic", 355),
+    ]);
+    expect(best?.id).toBe("c0000000000");
+  });
+
+  it("drops non-song lengths and unrelated videos", () => {
+    const best = pickBestResult("Daft Punk - One More Time", [
+      r("a", "One More Time", "Daft Punk", 20),
+      r("b", "Funny cats compilation", "Cats", 240),
+      r("c", "Daft Punk - One More Time (Official Video)", "Daft Punk", 320),
+    ]);
+    expect(best?.id).toBe("c0000000000");
+  });
+
+  it("allows the junk word when the user asked for it", () => {
+    const best = pickBestResult("Anitta ao vivo", [r("a", "Anitta - Envolver"), r("b", "Anitta Ao Vivo - Envolver")]);
+    expect(best?.id).toBe("b0000000000");
+  });
+
+  it("keeps YouTube's order when nothing distinguishes them, and ignores non-videos", () => {
+    expect(
+      pickBestResult("song", [
+        { id: "UCchannel", title: "song", artist: "x", duration: 0 },
+        r("a", "song"),
+        r("b", "song"),
+      ])?.id,
+    ).toBe("a0000000000");
+    expect(pickBestResult("song", [])).toBeUndefined();
   });
 });
