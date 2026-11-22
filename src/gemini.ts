@@ -39,6 +39,9 @@ export async function suggestNextSongs(nowPlaying: string, avoid: string[], coun
     contents:
       `A song is playing: "${nowPlaying}".\n` +
       `Suggest ${count} other songs in a similar genre, style and mood to play next.\n` +
+      `Pick well-known, popular songs (hits and fan favorites people actually know, not obscure deep cuts), ` +
+      `from the same era as the playing song or newer, mixing in recent hits when the style fits. ` +
+      `Only real released studio tracks that exist on YouTube — no live versions, covers, remixes or compilations.\n` +
       (avoid.length ? `Do not repeat any of these: ${avoid.join("; ")}.\n` : "") +
       `Answer with ONLY the songs, one per line as "Artist - Title", no quotes, no numbering, no extra text.`,
     config: { systemInstruction: "You are a music recommender. Reply with one song per line and nothing else." },
@@ -211,7 +214,7 @@ export async function openLive(h: LiveHandlers): Promise<Session> {
       systemInstruction:
         PERSONA +
         clock() +
-        ` You are speaking over voice, so be brief. Chat normally about anything (games, questions, small talk). You ALSO have tools to control the server's music bot, but use them ONLY when the person clearly asks for something music-related (play, queue, skip, radio, etc.). Never steer the conversation toward music or suggest playing something on your own — if the conversation is not about music, do not even mention it. When the person says goodbye or is done, call end_conversation. If the person asks for several actions in one request (e.g. "turn off autoplay, clear the queue and play X"), call ALL the needed tools in the SAME turn, in the order they said them, then give a single short confirmation. After using a tool, confirm with a very short sentence. Respond in ${languageName}.`,
+        ` You are speaking over voice, so be brief. Chat normally about anything (games, questions, small talk). You ALSO have tools to control the server's music bot, but use them ONLY when the person clearly asks for something music-related (play, queue, skip, radio, etc.). Never steer the conversation toward music or suggest playing something on your own — if the conversation is not about music, do not even mention it. If a music request names a song you can't pin down (an ambiguous title shared by several artists, a vague description like "that song from the movie", or a name you didn't catch), ask ONE short question offering the likely options before calling a tool; if the answer is still vague, play the best-known match. For open requests (a genre, a mood, "some songs by X"), don't ask — pick well-known songs yourself. When the person says goodbye or is done, call end_conversation. If the person asks for several actions in one request (e.g. "turn off autoplay, clear the queue and play X"), call ALL the needed tools in the SAME turn, in the order they said them, then give a single short confirmation. After using a tool, confirm with a very short sentence. Respond in ${languageName}.`,
       tools: TOOLS as any,
     },
     callbacks: {
