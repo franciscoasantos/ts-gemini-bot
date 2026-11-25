@@ -63,7 +63,12 @@ export interface LiveHandlers {
 
 const searchParam = {
   type: Type.OBJECT,
-  properties: { query: { type: Type.STRING, description: "Song name and/or artist to search on YouTube" } },
+  properties: {
+    query: {
+      type: Type.STRING,
+      description: "Song title AND artist to search on YouTube (e.g. 'Meteoro Luan Santana'), never the title alone",
+    },
+  },
   required: ["query"],
 };
 const songsParam = {
@@ -73,7 +78,7 @@ const songsParam = {
       type: Type.ARRAY,
       items: { type: Type.STRING },
       description:
-        "One or more songs to search on YouTube, in order (song name and/or artist each). For a request like 'the 3 best songs by X' or 'play some Y', expand it yourself into that many specific song titles.",
+        "One or more songs to search on YouTube, in order, each as song title AND artist (e.g. 'Meteoro Luan Santana'), never the title alone. For a request like 'the 3 best songs by X' or 'play some Y', expand it yourself into that many specific songs — never a genre or playlist search like 'top hits'.",
     },
   },
   required: ["queries"],
@@ -207,6 +212,12 @@ const TOOLS = [
 
 export async function openLive(h: LiveHandlers): Promise<Session> {
   const ref: { s?: Session } = {};
+  // The caller's speech as Gemini transcribed it; arrives in chunks, logged once per turn.
+  let heard = "";
+  const logHeard = () => {
+    if (heard.trim()) console.log(`[heard] "${heard.trim()}"`);
+    heard = "";
+  };
   const session = await ai.live.connect({
     model: LIVE_MODEL,
     config: {
@@ -214,8 +225,9 @@ export async function openLive(h: LiveHandlers): Promise<Session> {
       systemInstruction:
         PERSONA +
         clock() +
-        ` You are speaking over voice, so be brief. Chat normally about anything (games, questions, small talk). You ALSO have tools to control the server's music bot, but use them ONLY when the person clearly asks for something music-related (play, queue, skip, radio, etc.). Never steer the conversation toward music or suggest playing something on your own — if the conversation is not about music, do not even mention it. If a music request names a song you can't pin down (an ambiguous title shared by several artists, a vague description like "that song from the movie", or a name you didn't catch), ask ONE short question offering the likely options before calling a tool; if the answer is still vague, play the best-known match. For open requests (a genre, a mood, "some songs by X"), don't ask — pick well-known songs yourself. When the person says goodbye or is done, call end_conversation. If the person asks for several actions in one request (e.g. "turn off autoplay, clear the queue and play X"), call ALL the needed tools in the SAME turn, in the order they said them, then give a single short confirmation. After using a tool, confirm with a very short sentence. Respond in ${languageName}.`,
+        ` You are speaking over voice, so be brief. Chat normally about anything (games, questions, small talk). You ALSO have tools to control the server's music bot, but use them ONLY when the person clearly asks for something music-related (play, queue, skip, radio, etc.). Never steer the conversation toward music or suggest playing something on your own — if the conversation is not about music, do not even mention it. If a music request names a song you can't pin down (an ambiguous title shared by several artists, a vague description like "that song from the movie", or a name you didn't catch), ask ONE short question offering the likely options before calling a tool; if the answer is still vague, play the best-known match. For open requests (a genre, a mood, "some songs by X"), don't ask — pick well-known songs yourself. Every song you pass to a tool is its title plus its artist, even in a list and even if the person only said the title: add the artist of the best-known version yourself. When the person says goodbye or is done, call end_conversation. If the person asks for several actions in one request (e.g. "turn off autoplay, clear the queue and play X"), call ALL the needed tools in the SAME turn, in the order they said them, then give a single short confirmation. After using a tool, confirm with a very short sentence. Respond in ${languageName}.`,
       tools: TOOLS as any,
+      inputAudioTranscription: {}, // what Gemini heard, logged as [heard] to diagnose wrong songs
     },
     callbacks: {
       onopen: () => console.log(`[live] session open (${LIVE_MODEL})`),
@@ -223,7 +235,10 @@ export async function openLive(h: LiveHandlers): Promise<Session> {
         if (m.setupComplete) console.log("[live] ready (setupComplete)");
 
         // Tool calls (e.g. play music)
+        if (m.serverContent?.inputTranscription?.text) heard += m.serverContent.inputTranscription.text;
+
         if (m.toolCall?.functionCalls?.length) {
+          logHeard(); // before the tool lines, so the log reads speech → tool → pick
           const functionResponses = [];
           for (const fc of m.toolCall.functionCalls) {
             console.log(`[tool] ${fc.name}(${JSON.stringify(fc.args)})`);
@@ -257,6 +272,7 @@ export async function openLive(h: LiveHandlers): Promise<Session> {
         }
         if (bytes) console.log(`[live] replying (+${bytes} bytes of audio)`);
         if (c.turnComplete) {
+          logHeard();
           console.log("[live] turn complete");
           h.turnComplete();
         }

@@ -79,32 +79,38 @@ export interface SearchResult {
 const JUNK =
   /\b(reaction|react|reagindo|cover|karaoke|tutorial|aula|como tocar|lesson|instrumental|8d|slowed|sped up|nightcore|bass boosted|remix|live|ao vivo|1 hour|10 hours|full album|album completo|mix|playlist|podcast|review|interview|entrevista|trailer|shorts)\b/i;
 
-// Pick the result most likely to be the song the user wants. YouTube's own rank is the base;
-// junk words, non-song durations and poor query overlap push a result down; official sources
-// ("- Topic", VEVO, "official") push it up.
+// Rank results by how likely each is the song the user wants, best first. YouTube's own rank is
+// the base; junk words, non-song durations, medleys ("A / B") and poor query overlap push a result
+// down; official sources ("- Topic", VEVO, "official") and an uploader channel named in the query
+// (the artist's own channel, not a cover channel that only names them in the title) push it up.
 // ponytail: keyword heuristic, no view counts (the Manager's search drops them); add a view_count
 // field upstream in the Manager if popularity ranking is ever needed.
-export function pickBestResult(query: string, results: SearchResult[]): SearchResult | undefined {
+export function rankResults(query: string, results: SearchResult[]): { result: SearchResult; score: number }[] {
   const q = query.toLowerCase();
   const words = q.split(/[^\p{L}\p{N}]+/u).filter((w) => w.length > 2);
   const wantsLong = /\b(mix|album|hour|hora|playlist)\b/.test(q);
-  let best: SearchResult | undefined;
-  let bestScore = -Infinity;
+  const ranked: { result: SearchResult; score: number }[] = [];
   results.forEach((r, i) => {
     if (!/^[A-Za-z0-9_-]{11}$/.test(r.id)) return; // channels/playlists aren't playable songs
     const title = r.title.toLowerCase();
     const artist = r.artist.toLowerCase();
+    const channel = artist.replace(/ - topic$|vevo|oficial|official/g, "");
     let s = -i; // keep YouTube's relevance order as the tie-breaker
     const junk = title.match(JUNK)?.[0];
     if (junk && !q.includes(junk.toLowerCase())) s -= 6;
     if (r.duration && !wantsLong && (r.duration < 60 || r.duration > 600)) s -= 5;
+    if (title.includes(" / ") && !q.includes("/")) s -= 4; // medley of several songs
     if (/ - topic$|vevo/.test(artist)) s += 3;
     if (/official|oficial/.test(title)) s += 2;
+    if (words.some((w) => channel.includes(w))) s += 2;
     if (words.length) s += (4 * words.filter((w) => title.includes(w) || artist.includes(w)).length) / words.length;
-    if (s > bestScore) [best, bestScore] = [r, s];
+    ranked.push({ result: r, score: s });
   });
-  return best;
+  return ranked.sort((a, b) => b.score - a.score); // stable: ties keep YouTube's order
 }
+
+export const pickBestResult = (query: string, results: SearchResult[]): SearchResult | undefined =>
+  rankResults(query, results)[0]?.result;
 
 // Search YouTube via the Manager and return the best-matching result.
 async function findBest(query: string): Promise<SearchResult> {
@@ -114,9 +120,13 @@ async function findBest(query: string): Promise<SearchResult> {
     "search",
   );
   const results = await sr.json();
-  const best = pickBestResult(query, Array.isArray(results) ? results : results.results || []);
+  const ranked = rankResults(query, Array.isArray(results) ? results : results.results || []);
+  const best = ranked[0]?.result;
   if (!best) throw new Error("nothing found on YouTube");
   console.log(`[music] "${query}" → "${best.title}" (${best.artist})`);
+  // The runners-up with their scores, to tell a picker mistake from a bad query in the logs.
+  for (const { result, score } of ranked.slice(0, 3))
+    console.log(`[music]   ${score.toFixed(1)} "${result.title}" (${result.artist})`);
   return best;
 }
 

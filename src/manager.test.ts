@@ -70,6 +70,21 @@ describe("pickBestResult", () => {
     expect(best?.id).toBe("c0000000000");
   });
 
+  it("skips medleys and cover channels for the artist's own upload", () => {
+    expect(
+      pickBestResult("Deixa Acontecer Grupo Revelação", [
+        r("a", "Grupo Revelação - Deixa Acontecer / Coração Radiante", "Grupo Revelação"),
+        r("b", "Deixa Acontecer", "Grupo Revelação"),
+      ])?.id,
+    ).toBe("b0000000000");
+    expect(
+      pickBestResult("Te Assumi pro Brasil Matheus & Kauan", [
+        r("a", "Te Assumi Pro Brasil - Matheus e Kauan - JHON LIRA", "BlahTera"),
+        r("b", "Matheus & Kauan - Te Assumi Pro Brasil", "Matheus & Kauan"),
+      ])?.id,
+    ).toBe("b0000000000");
+  });
+
   it("allows the junk word when the user asked for it", () => {
     const best = pickBestResult("Anitta ao vivo", [r("a", "Anitta - Envolver"), r("b", "Anitta Ao Vivo - Envolver")]);
     expect(best?.id).toBe("b0000000000");
