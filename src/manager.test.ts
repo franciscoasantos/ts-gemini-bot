@@ -1,5 +1,26 @@
 import { describe, expect, it } from "vitest";
-import { findQueueIndex, pickBestResult } from "./manager.js";
+import { findQueueIndex, pickBestResult, playEach } from "./manager.js";
+
+describe("playEach", () => {
+  it("keeps going after a failure and plays the next song when the first fails", async () => {
+    const calls: string[] = [];
+    const play = async (q: string) => {
+      calls.push(`play ${q}`);
+      if (q === "a") throw new Error("500");
+    };
+    const enqueue = async (q: string) => void calls.push(`queue ${q}`);
+    expect(await playEach(["a", "b", "c"], true, play, enqueue)).toEqual(["a"]);
+    expect(calls).toEqual(["play a", "play b", "queue c"]);
+  });
+
+  it("only queues when playFirst is false", async () => {
+    const calls: string[] = [];
+    const play = async (q: string) => void calls.push(`play ${q}`);
+    const enqueue = async (q: string) => void calls.push(`queue ${q}`);
+    expect(await playEach(["a", "b"], false, play, enqueue)).toEqual([]);
+    expect(calls).toEqual(["queue a", "queue b"]);
+  });
+});
 
 describe("findQueueIndex", () => {
   // played: a, b | current: c (index 2) | upcoming: d (1), e (2)

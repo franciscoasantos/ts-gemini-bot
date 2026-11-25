@@ -299,3 +299,27 @@ export async function enqueueMusic(query: string): Promise<string> {
   await ok(await api(`/music-bots/${id}/queue`, { method: "POST", body: JSON.stringify({ songId }) }), "queue");
   return first.title || query;
 }
+
+// Plays/queues each song on its own: one failing song doesn't cancel the rest of the list. Until one
+// plays (when `playFirst`), the next song tries to play instead of queuing behind a failed one.
+// Returns the queries that failed.
+export async function playEach(
+  queries: string[],
+  playFirst: boolean,
+  play: (q: string) => Promise<unknown> = playMusic,
+  enqueue: (q: string) => Promise<unknown> = enqueueMusic,
+): Promise<string[]> {
+  const failed: string[] = [];
+  let needPlay = playFirst;
+  for (const q of queries) {
+    try {
+      if (needPlay) await play(q);
+      else await enqueue(q);
+      needPlay = false;
+    } catch (e: any) {
+      console.error(`[tool] "${q}" failed:`, e.message);
+      failed.push(q);
+    }
+  }
+  return failed;
+}

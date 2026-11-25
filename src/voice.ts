@@ -6,10 +6,9 @@ import { Player, type Ring, beep, down48to16, parseVoice, ringSlice, ringWrite, 
 import { openLive } from "./gemini.js";
 import { t } from "./i18n.js";
 import {
-  playMusic,
+  playEach,
   playNowKeepQueue,
   shouldQueue,
-  enqueueMusic,
   playRadio,
   getQueue,
   removeFromQueue,
@@ -140,6 +139,10 @@ export function initVoice(client: Ts3Client, deps: VoiceDeps) {
   // executes in the order received instead of racing. Each step catches its own error so one
   // failure never stalls the next.
   let actionChain: Promise<unknown> = Promise.resolve();
+  // Actions in actionChain not finished yet. Queue lookups (remove/jump/list) run right away and
+  // report the real outcome when this is 0; otherwise they wait in the chain so they see the queue
+  // the earlier actions leave behind ("play X and jump to song 2").
+  let pendingActions = 0;
 
   function toLive(pcm: Int16Array) {
     const data = Buffer.from(pcm.buffer, pcm.byteOffset, pcm.byteLength).toString("base64");
@@ -261,7 +264,7 @@ export function initVoice(client: Ts3Client, deps: VoiceDeps) {
             // Pick the action and return a short English status; Gemini phrases the spoken
             // confirmation in the configured language. "play_music" decides queue vs. now from
             // current state so the confirmation matches what actually happened.
-            let run: () => Promise<unknown> = async () => {};
+            let run: (() => Promise<unknown>) | null = null; // null = already done (or nothing to run)
             let result: Record<string, unknown>;
             if (name === "play_music") {
               const queueModeNow = await shouldQueue().catch(() => false); // for the spoken confirmation
@@ -269,53 +272,59 @@ export function initVoice(client: Ts3Client, deps: VoiceDeps) {
               // "clear the queue then play X" actually plays X instead of queuing it behind nothing.
               run = async () => {
                 const queueMode = await shouldQueue().catch(() => false);
-                for (let i = 0; i < queries.length; i++) {
-                  if (i === 0 && !queueMode) await playMusic(queries[i]);
-                  else await enqueueMusic(queries[i]);
-                }
+                const failed = await playEach(queries, !queueMode);
+                if (failed.length) throw new Error(`${failed.length}/${queries.length} songs failed`);
               };
               result = { ok: true, action: queueModeNow ? "queued" : "playing_now", count: queries.length, queries };
             } else if (name === "add_to_queue") {
               run = async () => {
-                for (const s of queries) await enqueueMusic(s);
+                const failed = await playEach(queries, false);
+                if (failed.length) throw new Error(`${failed.length}/${queries.length} songs failed`);
               };
               result = { ok: true, action: "queued", count: queries.length, queries };
-            } else if (name === "remove_from_queue") {
-              // fast (no download): do it now and report the real outcome
+            } else if (name === "remove_from_queue" || name === "jump_to_queue") {
+              // fast (no download): with nothing pending, do it now and report the real outcome
               const target = args?.position != null ? Number(args.position) : q;
-              const title = await removeFromQueue(target).catch(() => null);
-              result = title
-                ? { ok: true, action: "removed", title }
-                : { ok: false, reason: "not_found_in_queue", target };
-            } else if (name === "jump_to_queue") {
-              // fast (the queued song is already downloaded): do it now and report the real outcome
-              const target = args?.position != null ? Number(args.position) : q;
-              const title = await jumpToQueue(target).catch(() => null);
-              result = title
-                ? { ok: true, action: "playing_now", title }
-                : { ok: false, reason: "not_found_in_queue", target };
-            } else if (name === "list_queue") {
-              const { nowPlaying, upcoming } = await getQueue();
-              const LIMIT = 15;
-              let msg = nowPlaying ? `${t.nowPlaying(nowPlaying)}\n` : "";
-              if (upcoming.length) {
-                msg +=
-                  `${t.upcoming}\n` +
-                  upcoming
-                    .slice(0, LIMIT)
-                    .map((title, i) => `${i + 1}. ${title}`)
-                    .join("\n");
-                if (upcoming.length > LIMIT) msg += `\n${t.andMore(upcoming.length - LIMIT)}`;
-              } else if (!nowPlaying) {
-                msg = t.queueEmpty;
+              const remove = name === "remove_from_queue";
+              const act = () => (remove ? removeFromQueue(target) : jumpToQueue(target)).catch(() => null);
+              if (pendingActions) {
+                run = act;
+                result = {
+                  ok: true,
+                  action: remove ? "will_remove_after_previous_actions" : "will_jump_after_previous_actions",
+                  target,
+                };
               } else {
-                msg += t.noUpcoming;
+                const title = await act();
+                result = title
+                  ? { ok: true, action: remove ? "removed" : "playing_now", title }
+                  : { ok: false, reason: "not_found_in_queue", target };
               }
-              const autoplay = isAutoplayOn();
-              msg += `\n${t.autoplay(autoplay)}`;
-              sendText(2, 0, msg);
+            } else if (name === "list_queue") {
+              const list = async () => {
+                const { nowPlaying, upcoming } = await getQueue();
+                const LIMIT = 15;
+                let msg = nowPlaying ? `${t.nowPlaying(nowPlaying)}\n` : "";
+                if (upcoming.length) {
+                  msg +=
+                    `${t.upcoming}\n` +
+                    upcoming
+                      .slice(0, LIMIT)
+                      .map((title, i) => `${i + 1}. ${title}`)
+                      .join("\n");
+                  if (upcoming.length > LIMIT) msg += `\n${t.andMore(upcoming.length - LIMIT)}`;
+                } else if (!nowPlaying) {
+                  msg = t.queueEmpty;
+                } else {
+                  msg += t.noUpcoming;
+                }
+                msg += `\n${t.autoplay(isAutoplayOn())}`;
+                sendText(2, 0, msg);
+              };
+              if (pendingActions) run = list;
+              else await list();
               // return autoplay in the data so Gemini also says it out loud in the spoken confirmation
-              result = { ok: true, action: "listed_in_chat", autoplay };
+              result = { ok: true, action: "listed_in_chat", autoplay: isAutoplayOn() };
             } else if (name === "write_chat") {
               const text = String(args?.text || "");
               if (text) sendText(2, 0, text);
@@ -347,18 +356,23 @@ export function initVoice(client: Ts3Client, deps: VoiceDeps) {
             }
             // Heavy action (download ~10s) runs in the background; Gemini confirms by voice now and
             // the session closes right after that confirmation (afterTurn), not during the download.
-            actionChain = actionChain
-              .then(() => run())
-              .catch((e) => {
-                console.error(`[tool] ${name} error:`, e.message);
-                if (beeps)
-                  player.push(
-                    beep([
-                      { f: 392, ms: 150 },
-                      { f: 294, ms: 200 },
-                    ]),
-                  ); // only on failure
-              });
+            if (run) {
+              const step = run;
+              pendingActions++;
+              actionChain = actionChain
+                .then(() => step())
+                .finally(() => pendingActions--)
+                .catch((e) => {
+                  console.error(`[tool] ${name} error:`, e.message);
+                  if (beeps)
+                    player.push(
+                      beep([
+                        { f: 392, ms: 150 },
+                        { f: 294, ms: 200 },
+                      ]),
+                    ); // only on failure
+                });
+            }
             afterTurn = endConversationQuiet;
             clearTimeout(convoTimer);
             convoTimer = setTimeout(endConversationQuiet, 10000); // safety, in case turnComplete never arrives
