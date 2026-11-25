@@ -112,15 +112,29 @@ export function rankResults(query: string, results: SearchResult[]): { result: S
 export const pickBestResult = (query: string, results: SearchResult[]): SearchResult | undefined =>
   rankResults(query, results)[0]?.result;
 
-// Search YouTube via the Manager and return the best-matching result.
-async function findBest(query: string): Promise<SearchResult> {
+// YouTube's top results for a query, via the Manager (search only, nothing is downloaded).
+async function search(query: string): Promise<SearchResult[]> {
+  requireCreds();
   const { configId } = await findBot();
   const sr = await ok(
     await api(`/servers/${configId}/music-library/youtube/search`, { method: "POST", body: JSON.stringify({ query }) }),
     "search",
   );
   const results = await sr.json();
-  const ranked = rankResults(query, Array.isArray(results) ? results : results.results || []);
+  return Array.isArray(results) ? results : results.results || [];
+}
+
+// Videos found for a description ("Xamã Filipe Ret", an album, a lyric line), so Gemini can name a
+// song it doesn't know instead of guessing from memory.
+export async function searchSongs(query: string): Promise<{ title: string; channel: string }[]> {
+  return (await search(query))
+    .filter((r) => /^[A-Za-z0-9_-]{11}$/.test(r.id))
+    .map((r) => ({ title: r.title, channel: r.artist }));
+}
+
+// Search YouTube and return the best-matching result.
+async function findBest(query: string): Promise<SearchResult> {
+  const ranked = rankResults(query, await search(query));
   const best = ranked[0]?.result;
   if (!best) throw new Error("nothing found on YouTube");
   console.log(`[music] "${query}" → "${best.title}" (${best.artist})`);

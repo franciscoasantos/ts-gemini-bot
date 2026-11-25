@@ -8,6 +8,7 @@ import { t } from "./i18n.js";
 import {
   playEach,
   playNowKeepQueue,
+  searchSongs,
   shouldQueue,
   playRadio,
   getQueue,
@@ -240,6 +241,16 @@ export function initVoice(client: Ts3Client, deps: VoiceDeps) {
             if (name === "now_playing") {
               const { nowPlaying } = await getQueue();
               return nowPlaying ? { ok: true, title: nowPlaying } : { ok: false, reason: "nothing_playing" };
+            }
+            if (name === "search_songs") {
+              const query = String(args?.query ?? "");
+              const results = await searchSongs(query).catch((e) => {
+                console.error("[tool] search_songs error:", e.message);
+                return null;
+              });
+              if (!results) return { ok: false, reason: "search_failed" };
+              console.log(`[music] search "${query}": ${results.map((r) => r.title).join(" | ")}`);
+              return { ok: true, results };
             }
             const beeps = env.BEEP !== "0";
             // "tururum" = command recognized (instant feedback until the voice comes out)

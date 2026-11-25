@@ -201,6 +201,18 @@ const TOOLS = [
         parameters: { type: Type.OBJECT, properties: {} },
       },
       {
+        name: "search_songs",
+        description:
+          "Search YouTube and get the titles of the videos found, WITHOUT playing anything. Use it whenever the person describes a song without its exact title (by the artists, a collab, the album, a lyric line, 'that song from X') and you are not certain which song it is — search instead of guessing from memory, then name or play the song from the results. If the first search doesn't show it, try another one (e.g. the album name or a lyric).",
+        parameters: {
+          type: Type.OBJECT,
+          properties: {
+            query: { type: Type.STRING, description: "What to search: artist names, album, lyric line, etc." },
+          },
+          required: ["query"],
+        },
+      },
+      {
         name: "end_conversation",
         description:
           "End the voice conversation right away. Use when the person says goodbye or signals they are done (e.g. 'bye', 'that's all', 'thanks, that's it'). Then say a very short goodbye.",
@@ -225,7 +237,7 @@ export async function openLive(h: LiveHandlers): Promise<Session> {
       systemInstruction:
         PERSONA +
         clock() +
-        ` You are speaking over voice, so be brief. Chat normally about anything (games, questions, small talk). You ALSO have tools to control the server's music bot, but use them ONLY when the person clearly asks for something music-related (play, queue, skip, radio, etc.). Never steer the conversation toward music or suggest playing something on your own — if the conversation is not about music, do not even mention it. If a music request names a song you can't pin down (an ambiguous title shared by several artists, a vague description like "that song from the movie", or a name you didn't catch), ask ONE short question offering the likely options before calling a tool; if the answer is still vague, play the best-known match. For open requests (a genre, a mood, "some songs by X"), don't ask — pick well-known songs yourself. Every song you pass to a tool is its title plus its artist, even in a list and even if the person only said the title: add the artist of the best-known version yourself. When the person says goodbye or is done, call end_conversation. If the person asks for several actions in one request (e.g. "turn off autoplay, clear the queue and play X"), call ALL the needed tools in the SAME turn, in the order they said them, then give a single short confirmation. After using a tool, confirm with a very short sentence. Respond in ${languageName}.`,
+        ` You are speaking over voice, so be brief. Chat normally about anything (games, questions, small talk). You ALSO have tools to control the server's music bot, but use them ONLY when the person clearly asks for something music-related (play, queue, skip, radio, etc.). Never steer the conversation toward music or suggest playing something on your own — if the conversation is not about music, do not even mention it. When someone describes a song without its title (by artists, album or lyrics) and you aren't sure which one it is, call search_songs before answering — never guess a song name from memory. If a music request names a song you can't pin down (an ambiguous title shared by several artists, a vague description like "that song from the movie", or a name you didn't catch), ask ONE short question offering the likely options before calling a tool; if the answer is still vague, play the best-known match. For open requests (a genre, a mood, "some songs by X"), don't ask — pick well-known songs yourself. Every song you pass to a tool is its title plus its artist, even in a list and even if the person only said the title: add the artist of the best-known version yourself. When the person says goodbye or is done, call end_conversation. If the person asks for several actions in one request (e.g. "turn off autoplay, clear the queue and play X"), call ALL the needed tools in the SAME turn, in the order they said them, then give a single short confirmation. After using a tool, confirm with a very short sentence. Respond in ${languageName}.`,
       tools: TOOLS as any,
       inputAudioTranscription: {}, // what Gemini heard, logged as [heard] to diagnose wrong songs
     },
