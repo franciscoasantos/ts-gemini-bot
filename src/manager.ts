@@ -77,7 +77,7 @@ export interface SearchResult {
 
 // Words that mark a result as "not the song itself", unless the user asked for it.
 const JUNK =
-  /\b(reaction|react|reagindo|cover|karaoke|tutorial|aula|como tocar|lesson|instrumental|8d|slowed|sped up|nightcore|bass boosted|remix|live|ao vivo|1 hour|10 hours|full album|album completo|mix|playlist|podcast|review|interview|entrevista|trailer|shorts)\b/i;
+  /\b(reaction|react|reagindo|cover|karaoke|tutorial|aula|como tocar|lesson|instrumental|8d|slowed|sped up|nightcore|bass boosted|remix|live|ao vivo|1 hour|10 hours|full album|album completo|mix|playlist|podcast|review|interview|entrevista|trailer|shorts|making of|behind the scenes|bastidores|vivência)\b/i;
 
 // Rank results by how likely each is the song the user wants, best first. YouTube's own rank is
 // the base; junk words, non-song durations, medleys ("A / B") and poor query overlap push a result
@@ -87,7 +87,11 @@ const JUNK =
 // field upstream in the Manager if popularity ranking is ever needed.
 export function rankResults(query: string, results: SearchResult[]): { result: SearchResult; score: number }[] {
   const q = query.toLowerCase();
-  const words = q.split(/[^\p{L}\p{N}]+/u).filter((w) => w.length > 2);
+  const tokens = (s: string) => s.split(/[^\p{L}\p{N}]+/u);
+  // Numbers count whatever their length ("Poesia Acústica 5"), matched as whole tokens so 5 ≠ 15.
+  const isNum = (w: string) => /^\d+$/.test(w);
+  const words = tokens(q).filter((w) => w.length > 2 || isNum(w));
+  const nums = words.filter(isNum);
   const wantsLong = /\b(mix|album|hour|hora|playlist)\b/.test(q);
   const ranked: { result: SearchResult; score: number }[] = [];
   results.forEach((r, i) => {
@@ -95,15 +99,19 @@ export function rankResults(query: string, results: SearchResult[]): { result: S
     const title = r.title.toLowerCase();
     const artist = r.artist.toLowerCase();
     const channel = artist.replace(/ - topic$|vevo|oficial|official/g, "");
+    const titleTokens = tokens(title);
+    const has = (w: string) => (isNum(w) ? titleTokens.includes(w) : title.includes(w) || artist.includes(w));
     let s = -i; // keep YouTube's relevance order as the tie-breaker
     const junk = title.match(JUNK)?.[0];
     if (junk && !q.includes(junk.toLowerCase())) s -= 6;
-    if (r.duration && !wantsLong && (r.duration < 60 || r.duration > 600)) s -= 5;
+    // 15 min: long posse cuts (Poesia Acústica ~12 min) are songs; compilations run far longer.
+    if (r.duration && !wantsLong && (r.duration < 60 || r.duration > 900)) s -= 5;
+    if (nums.some((n) => !has(n)) && titleTokens.some(isNum)) s -= 6; // asked for #5, this is #6
     if (title.includes(" / ") && !q.includes("/")) s -= 4; // medley of several songs
     if (/ - topic$|vevo/.test(artist)) s += 3;
     if (/official|oficial/.test(title)) s += 2;
     if (words.some((w) => channel.includes(w))) s += 2;
-    if (words.length) s += (4 * words.filter((w) => title.includes(w) || artist.includes(w)).length) / words.length;
+    if (words.length) s += (4 * words.filter(has).length) / words.length;
     ranked.push({ result: r, score: s });
   });
   return ranked.sort((a, b) => b.score - a.score); // stable: ties keep YouTube's order

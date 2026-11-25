@@ -85,6 +85,19 @@ describe("pickBestResult", () => {
     ).toBe("b0000000000");
   });
 
+  it("matches the number asked for and allows long posse cuts", () => {
+    const P = "PineappleStormTV";
+    const best = pickBestResult("Poesia Acústica 5 Pineapple StormTV", [
+      r("a", "Poesia Acústica #5  -Teu Popô Remix - Hodari | Ducon | Chris", P, 743),
+      r("b", "Poesia Acústica #6 - Era Uma Vez - Mc Cabelinho, Orochi, Bob", P, 586),
+      r("c", "Poesia Acústica #15 - Mc Poze, Luiz Lins, MC Hariel", P, 690),
+      r("d", "Vivência | Poesia Acústica #5", P, 608),
+      r("e", "Poesia Acústica #2 - Sobre Nós - Delacruz", P, 482),
+      r("f", "Poesia Acústica Completa - #1 #2 #3 #4 #5 - Pineapple StormTV", "rapTrap", 2406),
+    ]);
+    expect(best?.id).toBe("a0000000000");
+  });
+
   it("allows the junk word when the user asked for it", () => {
     const best = pickBestResult("Anitta ao vivo", [r("a", "Anitta - Envolver"), r("b", "Anitta Ao Vivo - Envolver")]);
     expect(best?.id).toBe("b0000000000");
